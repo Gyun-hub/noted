@@ -1,26 +1,187 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #f2f3ee;
+  --surface: #ffffff;
+  --text: #20241f;
+  --text-muted: #6b7066;
+  --border: #dbddd2;
+  --border-strong: #b7bba9;
+  --accent: #ff6b45;
+  --accent-soft: #ffe4d9;
+  --accent-2: #4b6b4f;
+  --accent-2-soft: #dce6dc;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-text: var(--text);
+  --color-muted: var(--text-muted);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-2: var(--accent-2);
+  --color-accent-2-soft: var(--accent-2-soft);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --bg: #15171a;
+    --surface: #1c1f22;
+    --text: #e8e9e3;
+    --text-muted: #8d9289;
+    --border: #2a2d28;
+    --border-strong: #3c4038;
+    --accent: #ff7a55;
+    --accent-soft: #3a2a22;
+    --accent-2: #7fa383;
+    --accent-2-soft: #26302a;
   }
 }
 
+/* 디자인 미리보기용 대안 테마 (ThemeSwitcher). 하나 정해지면 나머지 + 스위처 지울 것 */
+:root[data-theme="terminal"] {
+  --bg: #05080a;
+  --surface: #0b1210;
+  --text: #d7ffe0;
+  --text-muted: #5f7a68;
+  --border: #16241c;
+  --border-strong: #274536;
+  --accent: #3ef07f;
+  --accent-soft: #12321f;
+  --accent-2: #58c4ff;
+  --accent-2-soft: #0f2636;
+}
+
+:root[data-theme="pastel"] {
+  --bg: #f7f2fb;
+  --surface: #ffffff;
+  --text: #362a45;
+  --text-muted: #8b7a9c;
+  --border: #ecdff5;
+  --border-strong: #d9c3ec;
+  --accent: #b06bf0;
+  --accent-soft: #f0e0fb;
+  --accent-2: #f2789a;
+  --accent-2-soft: #fde3ea;
+}
+
+* {
+  border-color: var(--border);
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--bg);
+  background-image: radial-gradient(var(--border) 1px, transparent 1px);
+  background-size: 22px 22px;
+  color: var(--text);
+  font-family: var(--font-sans), "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ledger-style input: bottom border only, no box */
+.ledger-input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 1.5px solid var(--border-strong);
+  padding: 0.5rem 0.1rem;
+  font-size: 0.9rem;
+  color: var(--text);
+  transition: border-color 0.15s ease;
+}
+.ledger-input::placeholder {
+  color: var(--text-muted);
+}
+.ledger-input:focus {
+  border-bottom-color: var(--accent);
+  outline: none;
+}
+
+/* signature interaction: hand-drawn tick checkbox */
+.ledger-check {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  cursor: pointer;
+  user-select: none;
+}
+.ledger-check input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.ledger-check .box {
+  flex: none;
+  width: 1.2rem;
+  height: 1.2rem;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 5px;
+  background: var(--surface);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.ledger-check input:checked ~ .box {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.ledger-check .tick {
+  width: 0.75rem;
+  height: 0.75rem;
+  overflow: visible;
+}
+.ledger-check .tick path {
+  fill: none;
+  stroke: white;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 16;
+  stroke-dashoffset: 16;
+  transition: stroke-dashoffset 0.25s ease 0.03s;
+}
+.ledger-check input:checked ~ .box .tick path {
+  stroke-dashoffset: 0;
+}
+.ledger-check .label {
+  position: relative;
+  font-size: 0.875rem;
+  color: var(--text);
+  transition: color 0.2s ease;
+}
+.ledger-check .label::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.25s ease;
+}
+.ledger-check input:checked ~ .label {
+  color: var(--text-muted);
+}
+.ledger-check input:checked ~ .label::after {
+  transform: scaleX(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }

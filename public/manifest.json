@@ -1,0 +1,14 @@
+{
+  "name": "noted",
+  "short_name": "noted",
+  "description": "매일 할 일 체크리스트",
+  "start_url": "/today",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f2f3ee",
+  "theme_color": "#20241f",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
