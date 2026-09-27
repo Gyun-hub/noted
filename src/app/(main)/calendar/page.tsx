@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { LedgerCheck } from "@/components/ledger-check";
 import { DeleteButton, EditActions, EditButton } from "@/components/inline-edit";
 import { runsOn } from "@/components/weekday-picker";
+import { getJson, send } from "@/lib/api";
 
 type Event = {
   id: string;
@@ -151,13 +152,15 @@ export default function CalendarPage() {
   async function load() {
     const range = `start=${toDateStr(new Date(year, month, 1))}&end=${toDateStr(new Date(year, month + 1, 0))}`;
     const [eventsData, todosData] = await Promise.all([
-      fetch(`/api/events?${range}`).then((r) => r.json()),
-      fetch(`/api/todos?${range}`).then((r) => r.json()),
+      getJson<{ events: Event[] }>(`/api/events?${range}`),
+      getJson<{ todos: Todo[]; recurring: RecurringTodo[]; logs: RecurringLog[] }>(`/api/todos?${range}`),
     ]);
-    setEvents(eventsData.events ?? []);
-    setTodos(todosData.todos ?? []);
-    setRecurring(todosData.recurring ?? []);
-    setLogs(todosData.logs ?? []);
+    if (eventsData) setEvents(eventsData.events ?? []);
+    if (todosData) {
+      setTodos(todosData.todos ?? []);
+      setRecurring(todosData.recurring ?? []);
+      setLogs(todosData.logs ?? []);
+    }
   }
 
   useEffect(() => {
@@ -185,15 +188,11 @@ export default function CalendarPage() {
   async function add(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim()) return;
-    const body =
+    const ok =
       kind === "event"
-        ? { title: title.trim(), eventDate: selected, eventTime: time || null }
-        : { title: title.trim(), dueDate: selected };
-    await fetch(kind === "event" ? "/api/events" : "/api/todos", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+        ? await send("/api/events", "POST", { title: title.trim(), eventDate: selected, eventTime: time || null })
+        : await send("/api/todos", "POST", { title: title.trim(), dueDate: selected });
+    if (!ok) return;
     setTitle("");
     setTime("");
     load();
@@ -206,43 +205,31 @@ export default function CalendarPage() {
         e.id === id ? { ...e, title: nextTitle, event_date: eventDate, event_time: eventTime || null } : e,
       ),
     );
-    await fetch(`/api/events/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: nextTitle, eventDate, eventTime: eventTime || null }),
-    });
+    await send(`/api/events/${id}`, "PATCH", { title: nextTitle, eventDate, eventTime: eventTime || null });
     load();
   }
 
   async function removeEvent(id: string) {
-    await fetch(`/api/events/${id}`, { method: "DELETE" });
-    load();
+    setEvents((list) => list.filter((e) => e.id !== id));
+    if (!(await send(`/api/events/${id}`, "DELETE"))) load();
   }
 
   async function saveTodo(id: string, nextTitle: string, dueDate: string) {
     setEditingId(null);
     setTodos((list) => list.map((t) => (t.id === id ? { ...t, title: nextTitle, due_date: dueDate } : t)));
-    await fetch(`/api/todos/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: nextTitle, dueDate }),
-    });
+    await send(`/api/todos/${id}`, "PATCH", { title: nextTitle, dueDate });
     load();
   }
 
   async function removeTodo(todo: Todo) {
     if (!confirm(`"${todo.title}" 삭제할까요?`)) return;
     setTodos((list) => list.filter((t) => t.id !== todo.id));
-    await fetch(`/api/todos/${todo.id}`, { method: "DELETE" });
+    if (!(await send(`/api/todos/${todo.id}`, "DELETE"))) load();
   }
 
   async function toggleTodo(id: string, current: boolean) {
     setTodos((list) => list.map((t) => (t.id === id ? { ...t, done: !current } : t)));
-    await fetch(`/api/todos/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ done: !current }),
-    });
+    if (!(await send(`/api/todos/${id}`, "PATCH", { done: !current }))) load();
   }
 
   async function toggleRecurring(todoId: string, current: boolean) {
@@ -251,11 +238,7 @@ export default function CalendarPage() {
       ...list.filter((l) => !(l.todo_id === todoId && l.log_date === date)),
       { todo_id: todoId, log_date: date, done: !current },
     ]);
-    await fetch(`/api/recurring-todos/${todoId}/log`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date, done: !current }),
-    });
+    if (!(await send(`/api/recurring-todos/${todoId}/log`, "PUT", { date, done: !current }))) load();
   }
 
   function shiftMonth(delta: number) {

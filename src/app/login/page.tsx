@@ -7,6 +7,7 @@ export default function LoginPage() {
   const router = useRouter();
   const [pin, setPin] = useState("");
   const [status, setStatus] = useState<"idle" | "checking" | "error">("idle");
+  const [message, setMessage] = useState("");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -15,14 +16,24 @@ export default function LoginPage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ pin }),
-    });
-    if (res.ok) {
+    }).catch(() => null);
+    if (res?.ok) {
       router.replace("/today");
       router.refresh();
-    } else {
-      setStatus("error");
-      setPin("");
+      return;
     }
+
+    if (res?.status === 429) {
+      const data = await res.json().catch(() => null);
+      const minutes = Math.max(1, Math.ceil((data?.retryAfter ?? 900) / 60));
+      setMessage(`실패가 많아 잠김. ${minutes}분 뒤 다시 시도.`);
+    } else if (res?.status === 401) {
+      setMessage("PIN 틀림. 다시 시도.");
+    } else {
+      setMessage("서버 연결 실패. 잠시 뒤 다시 시도.");
+    }
+    setStatus("error");
+    setPin("");
   }
 
   return (
@@ -57,7 +68,7 @@ export default function LoginPage() {
           </button>
           {status === "error" && (
             <p className="text-sm text-center" style={{ color: "var(--accent)" }}>
-              PIN 틀림. 다시 시도.
+              {message}
             </p>
           )}
         </form>

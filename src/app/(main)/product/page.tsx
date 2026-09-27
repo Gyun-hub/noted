@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { LedgerCheck } from "@/components/ledger-check";
 import { EditButton, InlineEdit } from "@/components/inline-edit";
+import { getJson, send } from "@/lib/api";
 
 type Product = {
   id: string;
@@ -16,9 +17,8 @@ export default function ProductPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   async function load() {
-    const res = await fetch("/api/products");
-    const data = await res.json();
-    setProducts(data.products ?? []);
+    const data = await getJson<{ products: Product[] }>("/api/products");
+    if (data) setProducts(data.products ?? []);
   }
 
   useEffect(() => {
@@ -29,41 +29,35 @@ export default function ProductPage() {
   async function addProduct(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
-    await fetch("/api/products", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: name.trim() }),
-    });
+    if (!(await send("/api/products", "POST", { name: name.trim() }))) return;
     setName("");
     load();
   }
 
   async function toggle(id: string, current: boolean) {
-    await fetch(`/api/products/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ done: !current }),
-    });
-    load();
+    setProducts((list) => list.map((p) => (p.id === id ? { ...p, done: !current } : p)));
+    if (!(await send(`/api/products/${id}`, "PATCH", { done: !current }))) load();
   }
 
   async function rename(id: string, next: string) {
     setEditingId(null);
     setProducts((list) => list.map((p) => (p.id === id ? { ...p, name: next } : p)));
-    await fetch(`/api/products/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: next }),
-    });
-    load();
+    if (!(await send(`/api/products/${id}`, "PATCH", { name: next }))) load();
   }
 
   async function remove(id: string) {
-    await fetch(`/api/products/${id}`, { method: "DELETE" });
-    load();
+    setProducts((list) => list.filter((p) => p.id !== id));
+    if (!(await send(`/api/products/${id}`, "DELETE"))) load();
   }
 
-  const remaining = products.filter((p) => !p.done).length;
+  async function clearDone() {
+    if (!confirm(`완료한 ${doneCount}개 항목을 지울까요?`)) return;
+    setProducts((list) => list.filter((p) => !p.done));
+    if (!(await send("/api/products?done=true", "DELETE"))) load();
+  }
+
+  const doneCount = products.filter((p) => p.done).length;
+  const remaining = products.length - doneCount;
 
   return (
     <div className="mx-auto max-w-md px-5 pt-8">
@@ -101,7 +95,14 @@ export default function ProductPage() {
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent-2" />
             목록
           </h2>
-          <span className="font-mono text-[11px] text-muted">{remaining}개 남음</span>
+          <div className="flex items-center gap-3 font-mono text-[11px] text-muted">
+            {doneCount > 0 && (
+              <button type="button" onClick={clearDone} className="hover:text-accent">
+                완료 비우기
+              </button>
+            )}
+            <span>{remaining}개 남음</span>
+          </div>
         </div>
 
         {products.length > 0 ? (

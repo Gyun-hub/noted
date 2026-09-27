@@ -5,6 +5,9 @@ import { useEffect, useRef, useState } from "react";
 import { LedgerCheck } from "@/components/ledger-check";
 import { DeleteButton, EditActions, EditButton, InlineEdit } from "@/components/inline-edit";
 import { WeekdayPicker, runsOn, weekdaysLabel } from "@/components/weekday-picker";
+import { RecurringHistory, STREAK_WINDOW, addDays } from "@/components/recurring-history";
+import { getJson, send } from "@/lib/api";
+import { dismissToast, showToast } from "@/lib/toast";
 
 type Todo = {
   id: string;
@@ -15,6 +18,7 @@ type Todo = {
 
 type RecurringTodo = Todo & {
   weekdays: number[] | null;
+  created_at: string;
 };
 
 type Event = {
@@ -23,10 +27,13 @@ type Event = {
   event_time: string | null;
 };
 
+type TodosResponse = { recurring: RecurringTodo[]; oneOff: Todo[] };
+type EventsResponse = { events: Event[] };
+type HistoryResponse = { logs: { todo_id: string; log_date: string; done: boolean }[] };
+
 const UNDO_MS = 4000;
 
-function todayStr() {
-  const d = new Date();
+function toDateStr(d: Date) {
   const offset = d.getTimezoneOffset();
   return new Date(d.getTime() - offset * 60000).toISOString().slice(0, 10);
 }
@@ -81,23 +88,32 @@ export default function TodayPage() {
   const [recurring, setRecurring] = useState<RecurringTodo[]>([]);
   const [oneOff, setOneOff] = useState<Todo[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
+  // 반복 관리 펼쳤을 때만 불러옴. `${todo_id}|${date}` 완료 기록
+  const [history, setHistory] = useState<Set<string> | null>(null);
   const [title, setTitle] = useState("");
   const [isRecurring, setIsRecurring] = useState(false);
   const [weekdays, setWeekdays] = useState<number[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [undo, setUndo] = useState<Todo | null>(null);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const date = todayStr();
+  const undoToast = useRef<number | null>(null);
+  const date = toDateStr(new Date());
   const weekday = new Date().getDay();
 
   async function load() {
     const [todosData, eventsData] = await Promise.all([
-      fetch(`/api/todos?date=${date}`).then((r) => r.json()),
-      fetch(`/api/events?start=${date}&end=${date}`).then((r) => r.json()),
+      getJson<TodosResponse>(`/api/todos?date=${date}`),
+      getJson<EventsResponse>(`/api/events?start=${date}&end=${date}`),
     ]);
-    setRecurring(todosData.recurring ?? []);
-    setOneOff(todosData.oneOff ?? []);
-    setEvents(eventsData.events ?? []);
+    if (todosData) {
+      setRecurring(todosData.recurring ?? []);
+      setOneOff(todosData.oneOff ?? []);
+    }
+    if (eventsData) setEvents(eventsData.events ?? []);
+  }
+
+  async function loadHistory() {
+    const data = await getJson<HistoryResponse>(`/api/todos?start=${addDays(date, -STREAK_WINDOW + 1)}&end=${date}`);
+    if (data) setHistory(new Set(data.logs.filter((l) => l.done).map((l) => `${l.todo_id}|${l.log_date}`)));
   }
 
   useEffect(() => {
@@ -111,13 +127,12 @@ export default function TodayPage() {
   async function addTodo(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim()) return;
-    await fetch("/api/todos", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(
-        isRecurring ? { title: title.trim(), isRecurring, weekdays } : { title: title.trim(), dueDate: date },
-      ),
-    });
+    const ok = await send(
+      "/api/todos",
+      "POST",
+      isRecurring ? { title: title.trim(), isRecurring, weekdays } : { title: title.trim(), dueDate: date },
+    );
+    if (!ok) return;
     setTitle("");
     setIsRecurring(false);
     setWeekdays([]);
@@ -125,80 +140,65 @@ export default function TodayPage() {
   }
 
   async function toggleRecurring(todoId: string, current: boolean) {
-    setRecurring((r) => r.map((t) => (t.id === todoId ? { ...t, done: !current } : t)));
-    await fetch(`/api/recurring-todos/${todoId}/log`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date, done: !current }),
+    const done = !current;
+    setRecurring((r) => r.map((t) => (t.id === todoId ? { ...t, done } : t)));
+    setHistory((h) => {
+      if (!h) return h;
+      const next = new Set(h);
+      if (done) next.add(`${todoId}|${date}`);
+      else next.delete(`${todoId}|${date}`);
+      return next;
     });
+    if (!(await send(`/api/recurring-todos/${todoId}/log`, "PUT", { date, done }))) {
+      load();
+      if (history) loadHistory();
+    }
   }
 
-  function patchDone(todoId: string, done: boolean) {
-    return fetch(`/api/todos/${todoId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ done }),
-    });
-  }
-
-  // 완료한 할 일은 바로 안 사라지고 UNDO_MS 동안 체크된 채 남아서 되돌릴 수 있음
+  // 완료한 할 일은 UNDO_MS 동안 체크된 채 남고, 그 사이 토스트나 체크 해제로 되돌릴 수 있음
   async function toggleOneOff(todo: Todo) {
     const done = !todo.done;
     setOneOff((list) => list.map((t) => (t.id === todo.id ? { ...t, done } : t)));
 
     if (done) {
       if (undoTimer.current) clearTimeout(undoTimer.current);
-      setUndo(todo);
+      if (undoToast.current) dismissToast(undoToast.current);
+      undoToast.current = showToast(`완료 · ${todo.title}`, {
+        duration: UNDO_MS,
+        action: { label: "되돌리기", onClick: () => toggleOneOff({ ...todo, done: true }) },
+      });
       undoTimer.current = setTimeout(() => {
-        setUndo(null);
         setOneOff((list) => list.filter((t) => !t.done));
       }, UNDO_MS);
-    } else if (undo?.id === todo.id) {
-      setUndo(null);
+    } else if (undoToast.current) {
+      dismissToast(undoToast.current);
     }
 
-    await patchDone(todo.id, done);
-  }
-
-  async function undoComplete() {
-    if (!undo) return;
-    if (undoTimer.current) clearTimeout(undoTimer.current);
-    const id = undo.id;
-    setUndo(null);
-    setOneOff((list) => list.map((t) => (t.id === id ? { ...t, done: false } : t)));
-    await patchDone(id, false);
+    if (!(await send(`/api/todos/${todo.id}`, "PATCH", { done }))) load();
   }
 
   async function renameOneOff(todoId: string, next: string) {
     setEditingId(null);
     setOneOff((list) => list.map((t) => (t.id === todoId ? { ...t, title: next } : t)));
-    await fetch(`/api/todos/${todoId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: next }),
-    });
+    if (!(await send(`/api/todos/${todoId}`, "PATCH", { title: next }))) load();
   }
 
   async function removeOneOff(todo: Todo) {
     if (!confirm(`"${todo.title}" 삭제할까요?`)) return;
     setOneOff((list) => list.filter((t) => t.id !== todo.id));
-    await fetch(`/api/todos/${todo.id}`, { method: "DELETE" });
+    if (!(await send(`/api/todos/${todo.id}`, "DELETE"))) load();
   }
 
   async function saveRecurring(todoId: string, next: string, nextWeekdays: number[]) {
     setEditingId(null);
-    await fetch(`/api/recurring-todos/${todoId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: next, weekdays: nextWeekdays }),
-    });
+    await send(`/api/recurring-todos/${todoId}`, "PATCH", { title: next, weekdays: nextWeekdays });
     load();
   }
 
   async function removeRecurring(todo: RecurringTodo) {
     if (!confirm(`반복 할 일 "${todo.title}" 삭제할까요?\n지난 체크 기록도 같이 지워집니다.`)) return;
     setRecurring((list) => list.filter((t) => t.id !== todo.id));
-    await fetch(`/api/recurring-todos/${todo.id}`, { method: "DELETE" });
+    if (!(await send(`/api/recurring-todos/${todo.id}`, "DELETE"))) load();
   }
 
   const todayRecurring = recurring.filter((t) => runsOn(t.weekdays, weekday));
@@ -340,7 +340,12 @@ export default function TodayPage() {
       </section>
 
       {recurring.length > 0 && (
-        <details className="group rounded-xl border bg-surface p-4">
+        <details
+          className="group rounded-xl border bg-surface p-4"
+          onToggle={(e) => {
+            if (e.currentTarget.open && !history) loadHistory();
+          }}
+        >
           <summary className="flex cursor-pointer list-none items-center justify-between font-mono text-[11px] uppercase tracking-[0.14em] text-muted">
             <span className="flex items-center gap-2">
               <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent-2" />
@@ -348,45 +353,39 @@ export default function TodayPage() {
             </span>
             <span className="transition-transform group-open:rotate-90">›</span>
           </summary>
-          <ul className="mt-3 space-y-3">
+          <ul className="mt-3 space-y-4">
             {recurring.map((t) => (
-              <li key={t.id} className="flex items-center gap-2 text-sm">
+              <li key={t.id} className="text-sm">
                 {editingId === t.id ? (
-                  <RecurringEditor
-                    todo={t}
-                    onSave={(next, nextWeekdays) => saveRecurring(t.id, next, nextWeekdays)}
-                    onCancel={() => setEditingId(null)}
-                  />
+                  <div className="flex">
+                    <RecurringEditor
+                      todo={t}
+                      onSave={(next, nextWeekdays) => saveRecurring(t.id, next, nextWeekdays)}
+                      onCancel={() => setEditingId(null)}
+                    />
+                  </div>
                 ) : (
                   <>
-                    <span className="flex-1">{t.title}</span>
-                    <span className="flex-none font-mono text-[10px] text-muted">{weekdaysLabel(t.weekdays)}</span>
-                    <EditButton onClick={() => setEditingId(t.id)} />
-                    <DeleteButton onClick={() => removeRecurring(t)} />
+                    <div className="flex items-center gap-2">
+                      <span className="flex-1">{t.title}</span>
+                      <span className="flex-none font-mono text-[10px] text-muted">{weekdaysLabel(t.weekdays)}</span>
+                      <EditButton onClick={() => setEditingId(t.id)} />
+                      <DeleteButton onClick={() => removeRecurring(t)} />
+                    </div>
+                    {history && (
+                      <RecurringHistory
+                        weekdays={t.weekdays}
+                        createdDate={toDateStr(new Date(t.created_at))}
+                        today={date}
+                        isDone={(d) => history.has(`${t.id}|${d}`)}
+                      />
+                    )}
                   </>
                 )}
               </li>
             ))}
           </ul>
         </details>
-      )}
-
-      {undo && (
-        <div className="fixed inset-x-0 bottom-6 z-40 flex justify-center px-5">
-          <div className="flex w-full max-w-md items-center gap-3 rounded-full border bg-surface px-4 py-2.5 text-sm shadow-lg">
-            <span className="flex-1 truncate">
-              <span className="text-muted">완료 · </span>
-              {undo.title}
-            </span>
-            <button
-              type="button"
-              onClick={undoComplete}
-              className="flex-none font-mono text-[11px] uppercase tracking-wide text-accent"
-            >
-              되돌리기
-            </button>
-          </div>
-        </div>
       )}
     </div>
   );

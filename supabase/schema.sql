@@ -16,6 +16,7 @@ drop table if exists note_events;
 drop table if exists note_ideas;
 drop table if exists note_recurring_todo_logs;
 drop table if exists note_recurring_todos;
+drop table if exists note_login_attempts;
 
 create table note_recurring_todos (
   id uuid primary key default gen_random_uuid(),
@@ -62,7 +63,16 @@ create table note_ideas (
   created_at timestamptz not null default now()
 );
 
+-- PIN 로그인 실패 기록. 키는 IP, 또는 전체 합산용 '*'.
+create table note_login_attempts (
+  key text primary key,
+  fail_count int not null default 0,
+  locked_until timestamptz,
+  updated_at timestamptz not null default now()
+);
+
 alter table note_recurring_todos enable row level security;
+alter table note_login_attempts enable row level security;
 alter table note_recurring_todo_logs enable row level security;
 alter table note_todos enable row level security;
 alter table note_products enable row level security;

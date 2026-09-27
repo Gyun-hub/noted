@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
+import { Toaster } from "@/components/toaster";
+import { send } from "@/lib/api";
 
 const links = [
   { href: "/today", label: "today" },
@@ -18,7 +20,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
 
   async function logout() {
     if (!confirm("로그아웃할까요?")) return;
-    await fetch("/api/auth/logout", { method: "POST" });
+    if (!(await send("/api/auth/logout", "POST"))) return;
     router.replace("/login");
     router.refresh();
   }
@@ -26,6 +28,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   return (
     <div className="relative min-h-dvh">
       <main className="pb-10">{children}</main>
+      <Toaster />
 
       <button
         type="button"

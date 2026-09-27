@@ -1,13 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { EditButton, InlineEdit } from "@/components/inline-edit";
+import { getJson, send } from "@/lib/api";
+import { showToast } from "@/lib/toast";
+import { EditActions, EditButton, InlineEdit } from "@/components/inline-edit";
 
 type Idea = {
   id: string;
   content: string;
   created_at: string;
 };
+
+function toDateStr(d: Date) {
+  const offset = d.getTimezoneOffset();
+  return new Date(d.getTime() - offset * 60000).toISOString().slice(0, 10);
+}
 
 function formatDate(iso: string) {
   return new Intl.DateTimeFormat("ko-KR", {
@@ -22,11 +29,12 @@ export default function IdeaPage() {
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [content, setContent] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [convertingId, setConvertingId] = useState<string | null>(null);
+  const [convertDate, setConvertDate] = useState("");
 
   async function load() {
-    const res = await fetch("/api/ideas");
-    const data = await res.json();
-    setIdeas(data.ideas ?? []);
+    const data = await getJson<{ ideas: Idea[] }>("/api/ideas");
+    if (data) setIdeas(data.ideas ?? []);
   }
 
   useEffect(() => {
@@ -37,11 +45,7 @@ export default function IdeaPage() {
   async function addIdea(e: React.FormEvent) {
     e.preventDefault();
     if (!content.trim()) return;
-    await fetch("/api/ideas", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: content.trim() }),
-    });
+    if (!(await send("/api/ideas", "POST", { content: content.trim() }))) return;
     setContent("");
     load();
   }
@@ -49,17 +53,28 @@ export default function IdeaPage() {
   async function saveEdit(id: string, next: string) {
     setEditingId(null);
     setIdeas((list) => list.map((i) => (i.id === id ? { ...i, content: next } : i)));
-    await fetch(`/api/ideas/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: next }),
-    });
-    load();
+    if (!(await send(`/api/ideas/${id}`, "PATCH", { content: next }))) load();
   }
 
   async function remove(id: string) {
-    await fetch(`/api/ideas/${id}`, { method: "DELETE" });
-    load();
+    setIdeas((list) => list.filter((i) => i.id !== id));
+    if (!(await send(`/api/ideas/${id}`, "DELETE"))) load();
+  }
+
+  function startConvert(id: string) {
+    setEditingId(null);
+    setConvertingId(id);
+    setConvertDate(toDateStr(new Date()));
+  }
+
+  // 아이디어는 남겨두고 첫 줄을 제목으로 할 일 생성
+  async function convertToTodo(e: React.FormEvent, idea: Idea) {
+    e.preventDefault();
+    const title = idea.content.split("\n")[0].trim().slice(0, 100);
+    if (!title || !convertDate) return;
+    if (!(await send("/api/todos", "POST", { title, dueDate: convertDate }))) return;
+    setConvertingId(null);
+    showToast(`할 일로 등록 · ${convertDate.slice(5).replace("-", ".")}`);
   }
 
   return (
@@ -106,6 +121,22 @@ export default function IdeaPage() {
                   </span>
                   {editingId !== idea.id && (
                     <div className="flex items-center">
+                      <button
+                        type="button"
+                        onClick={() => startConvert(idea.id)}
+                        aria-label="할 일로 등록"
+                        className="grid h-6 w-6 flex-none place-items-center rounded-full text-muted transition-colors hover:bg-accent-2-soft hover:text-accent-2"
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                          <path
+                            d="M4 12.5l4.5 4.5L20 5.5M14 19h6"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </button>
                       <EditButton onClick={() => setEditingId(idea.id)} />
                       <button
                         onClick={() => remove(idea.id)}
@@ -128,6 +159,23 @@ export default function IdeaPage() {
                   />
                 ) : (
                   <p className="whitespace-pre-wrap text-sm">{idea.content}</p>
+                )}
+                {convertingId === idea.id && (
+                  <form
+                    onSubmit={(e) => convertToTodo(e, idea)}
+                    onKeyDown={(e) => e.key === "Escape" && setConvertingId(null)}
+                    className="mt-3 flex items-center gap-2 border-t border-dashed pt-3"
+                  >
+                    <span className="flex-none font-mono text-[10px] uppercase tracking-wide text-accent-2">할 일로</span>
+                    <input
+                      type="date"
+                      required
+                      value={convertDate}
+                      onChange={(e) => setConvertDate(e.target.value)}
+                      className="ledger-input flex-1 py-1 font-mono text-xs"
+                    />
+                    <EditActions onCancel={() => setConvertingId(null)} />
+                  </form>
                 )}
               </li>
             ))}

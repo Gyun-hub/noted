@@ -24,7 +24,7 @@ export async function GET(request: Request) {
   const supabase = createAdminClient();
 
   const [{ data: recurring }, { data: oneOff }] = await Promise.all([
-    supabase.from("note_recurring_todos").select("id, title, weekdays").order("created_at", { ascending: true }),
+    supabase.from("note_recurring_todos").select("id, title, weekdays, created_at").order("created_at", { ascending: true }),
     supabase
       .from("note_todos")
       .select("id, title, done, due_date")
