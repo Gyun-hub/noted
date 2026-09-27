@@ -1,187 +1,395 @@
 @import "tailwindcss";
 
+/*
+ * 팔레트 Navy #2F39A9 / Blue #2E6FA0 / Teal #49A4BB / Mint #15D8B3.
+ * navy = 주 색(버튼, 일정, 선택, 도장), blue = 반복, teal = 할 일 표시, mint = 형광펜(배경으로만).
+ * mint·teal은 흰 바탕 글자색으로 쓰면 대비 부족 → 면/선/점에만 사용.
+ */
 :root {
-  --bg: #f2f3ee;
-  --surface: #ffffff;
-  --text: #20241f;
-  --text-muted: #6b7066;
-  --border: #dbddd2;
-  --border-strong: #b7bba9;
-  --accent: #ff6b45;
-  --accent-soft: #ffe4d9;
-  --accent-2: #4b6b4f;
-  --accent-2-soft: #dce6dc;
-}
-
-@theme inline {
-  --color-bg: var(--bg);
-  --color-surface: var(--surface);
-  --color-text: var(--text);
-  --color-muted: var(--text-muted);
-  --color-border: var(--border);
-  --color-border-strong: var(--border-strong);
-  --color-accent: var(--accent);
-  --color-accent-soft: var(--accent-soft);
-  --color-accent-2: var(--accent-2);
-  --color-accent-2-soft: var(--accent-2-soft);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --paper: #f3f6f9;
+  --sheet: #ffffff;
+  --grid: #e2e9f0;
+  --rule: #cfd9e3;
+  --ink: #1a1f3d;
+  --pencil: #5f6b82;
+  --navy: #2f39a9;
+  --navy-soft: #e3e5f7;
+  --blue: #2e6fa0;
+  --blue-soft: #e0ecf5;
+  --teal: #49a4bb;
+  --mint: #15d8b3;
+  --mint-soft: #c8f5ec;
+  color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #15171a;
-    --surface: #1c1f22;
-    --text: #e8e9e3;
-    --text-muted: #8d9289;
-    --border: #2a2d28;
-    --border-strong: #3c4038;
-    --accent: #ff7a55;
-    --accent-soft: #3a2a22;
-    --accent-2: #7fa383;
-    --accent-2-soft: #26302a;
+    --paper: #0f1424;
+    --sheet: #161c30;
+    --grid: #151b2d;
+    --rule: #262e48;
+    --ink: #e6e9f5;
+    --pencil: #8e98b3;
+    --navy: #8c95f0;
+    --navy-soft: #232a57;
+    --blue: #6fa8d6;
+    --blue-soft: #1a2c40;
+    --teal: #5bbad0;
+    --mint: #2de3c0;
+    --mint-soft: #0f3b36;
+    color-scheme: dark;
   }
 }
 
-/* 디자인 미리보기용 대안 테마 (ThemeSwitcher). 하나 정해지면 나머지 + 스위처 지울 것 */
-:root[data-theme="terminal"] {
-  --bg: #05080a;
-  --surface: #0b1210;
-  --text: #d7ffe0;
-  --text-muted: #5f7a68;
-  --border: #16241c;
-  --border-strong: #274536;
-  --accent: #3ef07f;
-  --accent-soft: #12321f;
-  --accent-2: #58c4ff;
-  --accent-2-soft: #0f2636;
-}
-
-:root[data-theme="pastel"] {
-  --bg: #f7f2fb;
-  --surface: #ffffff;
-  --text: #362a45;
-  --text-muted: #8b7a9c;
-  --border: #ecdff5;
-  --border-strong: #d9c3ec;
-  --accent: #b06bf0;
-  --accent-soft: #f0e0fb;
-  --accent-2: #f2789a;
-  --accent-2-soft: #fde3ea;
+@theme inline {
+  --color-paper: var(--paper);
+  --color-sheet: var(--sheet);
+  --color-grid: var(--grid);
+  --color-rule: var(--rule);
+  --color-ink: var(--ink);
+  --color-pencil: var(--pencil);
+  --color-navy: var(--navy);
+  --color-navy-soft: var(--navy-soft);
+  --color-blue: var(--blue);
+  --color-blue-soft: var(--blue-soft);
+  --color-teal: var(--teal);
+  --color-mint: var(--mint);
+  --color-mint-soft: var(--mint-soft);
+  --font-sans: "Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
 }
 
 * {
-  border-color: var(--border);
+  border-color: var(--rule);
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
-  background-color: var(--bg);
-  background-image: radial-gradient(var(--border) 1px, transparent 1px);
-  background-size: 22px 22px;
-  color: var(--text);
-  font-family: var(--font-sans), "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  background-color: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.6;
+  font-feature-settings: "tnum";
 }
 
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--navy);
   outline-offset: 2px;
+  border-radius: 4px;
 }
 
-/* ledger-style input: bottom border only, no box */
-.ledger-input {
-  width: 100%;
-  background: transparent;
-  border: none;
-  border-bottom: 1.5px solid var(--border-strong);
-  padding: 0.5rem 0.1rem;
-  font-size: 0.9rem;
-  color: var(--text);
-  transition: border-color 0.15s ease;
-}
-.ledger-input::placeholder {
-  color: var(--text-muted);
-}
-.ledger-input:focus {
-  border-bottom-color: var(--accent);
-  outline: none;
+::selection {
+  background: var(--mint-soft);
 }
 
-/* signature interaction: hand-drawn tick checkbox */
-.ledger-check {
+/* ---------- 제목 ---------- */
+
+.page-title {
+  font-size: 2.25rem;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.035em;
+}
+
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1.5px solid var(--ink);
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+.section-head[data-tone="blue"] {
+  border-bottom-color: var(--blue);
+  color: var(--blue);
+}
+.section-head[data-tone="navy"] {
+  border-bottom-color: var(--navy);
+  color: var(--navy);
+}
+.section-head .aside {
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: var(--pencil);
+}
+
+/* ---------- 목록 ---------- */
+
+.row {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.5rem;
+  min-height: 3rem;
+  padding-block: 0.375rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.empty {
+  padding-block: 1.25rem;
+  color: var(--pencil);
+  font-size: 0.875rem;
+}
+
+/* ---------- 입력 ---------- */
+
+.field {
+  width: 100%;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  border-bottom: 1.5px solid var(--rule);
+  border-radius: 0;
+  padding: 0.5rem 0.125rem;
+  font-size: 1rem;
+  color: var(--ink);
+  transition: border-color 0.15s ease;
+}
+.field::placeholder {
+  color: var(--pencil);
+}
+.field:focus {
+  border-bottom-color: var(--navy);
+  outline: none;
+}
+.field-sm {
+  font-size: 0.875rem;
+  padding-block: 0.25rem;
+}
+
+.add-btn {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 999px;
+  background: var(--navy);
+  color: #fff;
+  transition: transform 0.1s ease;
+}
+.add-btn:active {
+  transform: scale(0.94);
+}
+@media (prefers-color-scheme: dark) {
+  .add-btn {
+    color: var(--paper);
+  }
+}
+
+.icon-btn {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  color: var(--pencil);
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.icon-btn:hover {
+  color: var(--ink);
+  background: var(--grid);
+}
+.icon-btn[data-tone="navy"]:hover {
+  color: var(--navy);
+  background: var(--navy-soft);
+}
+
+/* 토글 칩: 켜지면 해당 색 */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  height: 2rem;
+  padding-inline: 0.875rem;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  color: var(--pencil);
+  background: var(--sheet);
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+.chip[aria-pressed="true"] {
+  color: var(--navy);
+  border-color: var(--navy);
+  background: var(--navy-soft);
+}
+.chip[data-tone="blue"][aria-pressed="true"] {
+  color: var(--blue);
+  border-color: var(--blue);
+  background: var(--blue-soft);
+}
+
+.text-btn {
+  font-size: 0.8125rem;
+  color: var(--pencil);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--rule);
+}
+.text-btn:hover {
+  color: var(--ink);
+}
+
+/* ---------- 체크박스: 펜으로 긋는 체크 ---------- */
+
+.pen-check {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: 0.75rem;
   cursor: pointer;
   user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
-.ledger-check input {
+.pen-check input {
   position: absolute;
   width: 1px;
   height: 1px;
   opacity: 0;
   pointer-events: none;
 }
-.ledger-check .box {
+.pen-check .box {
+  position: relative;
   flex: none;
-  width: 1.2rem;
-  height: 1.2rem;
-  display: grid;
-  place-items: center;
-  border: 1.5px solid var(--border-strong);
-  border-radius: 5px;
-  background: var(--surface);
-  transition: background 0.15s ease, border-color 0.15s ease;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 1.5px solid var(--pencil);
+  border-radius: 3px;
+  background: var(--sheet);
+  transition: background 0.2s ease;
 }
-.ledger-check input:checked ~ .box {
-  background: var(--accent);
-  border-color: var(--accent);
+.pen-check input:checked ~ .box {
+  background: var(--mint-soft);
 }
-.ledger-check .tick {
-  width: 0.75rem;
-  height: 0.75rem;
+.pen-check input:focus-visible ~ .box {
+  outline: 2px solid var(--navy);
+  outline-offset: 2px;
+}
+/* 체크 표시는 상자 밖으로 삐져나가게 */
+.pen-check .tick {
+  position: absolute;
+  left: -2px;
+  top: -7px;
+  width: 1.75rem;
+  height: 1.75rem;
   overflow: visible;
 }
-.ledger-check .tick path {
+.pen-check .tick path {
   fill: none;
-  stroke: white;
-  stroke-width: 2.4;
+  stroke: var(--check, var(--navy));
+  stroke-width: 2.6;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-dasharray: 16;
-  stroke-dashoffset: 16;
-  transition: stroke-dashoffset 0.25s ease 0.03s;
+  stroke-dasharray: 30;
+  stroke-dashoffset: 30;
+  transition: stroke-dashoffset 0.28s cubic-bezier(0.6, 0, 0.3, 1);
 }
-.ledger-check input:checked ~ .box .tick path {
+.pen-check input:checked ~ .box .tick path {
   stroke-dashoffset: 0;
 }
-.ledger-check .label {
-  position: relative;
-  font-size: 0.875rem;
-  color: var(--text);
+.pen-check .label {
+  min-width: 0;
+  overflow-wrap: anywhere;
   transition: color 0.2s ease;
 }
-.ledger-check .label::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 50%;
-  height: 1px;
-  background: currentColor;
-  transform: scaleX(0);
-  transform-origin: left;
-  transition: transform 0.25s ease;
+.pen-check input:checked ~ .label {
+  color: var(--pencil);
+  text-decoration: line-through;
+  text-decoration-color: var(--pencil);
 }
-.ledger-check input:checked ~ .label {
-  color: var(--text-muted);
+.pen-check[data-tone="blue"] {
+  --check: var(--blue);
 }
-.ledger-check input:checked ~ .label::after {
-  transform: scaleX(1);
+
+/* ---------- 형광펜 ---------- */
+
+.highlight {
+  background: linear-gradient(transparent 58%, var(--mint-soft) 58%, var(--mint-soft) 92%, transparent 92%);
+  padding-inline: 0.125em;
+}
+
+/* ---------- 도장: 오늘 반복 다 끝내면 ---------- */
+
+.stamp {
+  display: inline-grid;
+  place-items: center;
+  width: 4.25rem;
+  height: 4.25rem;
+  border: 2.5px solid var(--navy);
+  border-radius: 999px;
+  color: var(--navy);
+  background: color-mix(in srgb, var(--mint) 18%, transparent);
+  font-weight: 700;
+  font-size: 0.8125rem;
+  line-height: 1.15;
+  text-align: center;
+  transform: rotate(-14deg);
+  box-shadow: inset 0 0 0 3px var(--paper), inset 0 0 0 4.5px var(--navy);
+  animation: stamp-press 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+@keyframes stamp-press {
+  0% {
+    opacity: 0;
+    transform: rotate(-4deg) scale(1.8);
+  }
+  60% {
+    opacity: 1;
+    transform: rotate(-16deg) scale(0.94);
+  }
+  100% {
+    transform: rotate(-14deg) scale(1);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  * {
+  *,
+  *::before,
+  *::after {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
   }
+}
+
+/* ---------- 입력 상자: 각 탭의 새로 적는 곳. 눈에 잘 띄게 ---------- */
+
+.composer {
+  margin-bottom: 2.5rem;
+  padding: 0.875rem 0.875rem 0.875rem 1rem;
+  border: 1.5px solid var(--rule);
+  border-radius: 1rem;
+  background: var(--sheet);
+  box-shadow: 0 1px 0 var(--rule);
+  transition: border-color 0.15s ease;
+}
+.composer:focus-within {
+  border-color: var(--navy);
+}
+.composer-label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--navy);
+}
+.composer-input {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  padding: 0.375rem 0;
+  font-size: 1.0625rem;
+  color: var(--ink);
+}
+.composer-input::placeholder {
+  color: var(--pencil);
+}
+.composer-input:focus {
+  outline: none;
 }

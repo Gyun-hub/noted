@@ -1,17 +1,9 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import { ThemeSwitcher } from "@/components/theme-switcher";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+// Pretendard: dynamic subset CSS라 화면에 쓰인 글자 조각만 내려받음
+const PRETENDARD_CSS =
+  "https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css";
 
 export const metadata: Metadata = {
   title: "noted",
@@ -26,21 +18,20 @@ export const metadata: Metadata = {
 
 export const viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f2f3ee" },
-    { media: "(prefers-color-scheme: dark)", color: "#15171a" },
+    { media: "(prefers-color-scheme: light)", color: "#f3f6f9" },
+    { media: "(prefers-color-scheme: dark)", color: "#0f1424" },
   ],
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html
-      lang="ko"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">
-        {children}
-        <ThemeSwitcher />
-      </body>
+    <html lang="ko" className="h-full antialiased">
+      <head>
+        <link rel="preconnect" href="https://cdn.jsdelivr.net" crossOrigin="anonymous" />
+        <link rel="stylesheet" href={PRETENDARD_CSS} crossOrigin="anonymous" />
+      </head>
+      <body className="min-h-full">{children}</body>
     </html>
   );
 }

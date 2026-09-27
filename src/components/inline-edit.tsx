@@ -2,17 +2,14 @@
 
 import { useState } from "react";
 
-const iconButtonClass =
-  "grid h-6 w-6 flex-none place-items-center rounded-full text-muted transition-colors hover:bg-accent-soft hover:text-accent";
-
-export function EditButton({ onClick }: { onClick: () => void }) {
+export function EditButton({ onClick, label = "수정" }: { onClick: () => void; label?: string }) {
   return (
-    <button type="button" onClick={onClick} aria-label="수정" className={iconButtonClass}>
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+    <button type="button" onClick={onClick} aria-label={label} className="icon-btn">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path
           d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4"
           stroke="currentColor"
-          strokeWidth="1.8"
+          strokeWidth="1.7"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
@@ -21,14 +18,14 @@ export function EditButton({ onClick }: { onClick: () => void }) {
   );
 }
 
-export function DeleteButton({ onClick }: { onClick: () => void }) {
+export function DeleteButton({ onClick, label = "삭제" }: { onClick: () => void; label?: string }) {
   return (
-    <button type="button" onClick={onClick} aria-label="삭제" className={iconButtonClass}>
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+    <button type="button" onClick={onClick} aria-label={label} className="icon-btn" data-tone="navy">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path
           d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"
           stroke="currentColor"
-          strokeWidth="1.8"
+          strokeWidth="1.7"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
@@ -37,20 +34,16 @@ export function DeleteButton({ onClick }: { onClick: () => void }) {
   );
 }
 
-export function EditActions({ onCancel }: { onCancel: () => void }) {
+export function EditActions({ onCancel, saveLabel = "저장" }: { onCancel: () => void; saveLabel?: string }) {
   return (
-    <>
-      <button type="submit" aria-label="저장" className={iconButtonClass}>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-          <path d="M5 12.5l4.5 4.5L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
+    <div className="flex flex-none items-center gap-1">
+      <button type="submit" className="h-8 rounded-full bg-navy px-3 text-[13px] font-medium text-paper">
+        {saveLabel}
       </button>
-      <button type="button" onClick={onCancel} aria-label="취소" className={iconButtonClass}>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-          <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-        </svg>
+      <button type="button" onClick={onCancel} className="h-8 px-2 text-[13px] text-pencil hover:text-ink">
+        취소
       </button>
-    </>
+    </div>
   );
 }
 
@@ -86,15 +79,15 @@ export function InlineEdit({
   }
 
   return (
-    <form onSubmit={submit} className={`flex items-end gap-1 ${className}`}>
+    <form onSubmit={submit} className={`flex items-end gap-2 ${className}`}>
       {multiline ? (
         <textarea
           autoFocus
-          rows={3}
+          rows={4}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={onKeyDown}
-          className="ledger-input resize-none"
+          className="field resize-none"
         />
       ) : (
         <input
@@ -102,7 +95,7 @@ export function InlineEdit({
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={onKeyDown}
-          className="ledger-input"
+          className="field"
         />
       )}
       <EditActions onCancel={onCancel} />

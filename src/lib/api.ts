@@ -19,7 +19,7 @@ export async function getJson<T>(url: string): Promise<T | null> {
     if (!res.ok) throw new Error(String(res.status));
     return (await res.json()) as T;
   } catch {
-    showToast("불러오기 실패. 연결 확인.", { tone: "error" });
+    showToast("데이터를 불러오지 못했어요. 서버 연결을 확인하세요.", { tone: "error" });
     return null;
   }
 }
@@ -36,7 +36,7 @@ export async function send(url: string, method: "POST" | "PATCH" | "PUT" | "DELE
     if (!res.ok) throw new Error(String(res.status));
     return true;
   } catch {
-    showToast("저장 실패. 다시 시도.", { tone: "error" });
+    showToast("저장하지 못했어요. 다시 시도하세요.", { tone: "error" });
     return false;
   }
 }

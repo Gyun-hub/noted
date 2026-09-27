@@ -12,3 +12,12 @@ export function parseWeekdays(value: unknown): number[] | null | undefined {
   const days = [...new Set(value as number[])].sort();
   return days.length === 0 || days.length === 7 ? null : days;
 }
+
+/** 장보기 구매처. 빈 값 = null(미정), 50자 제한. 형식 틀리면 undefined */
+export function parseStore(value: unknown): string | null | undefined {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== "string") return undefined;
+  const store = value.trim();
+  if (store.length > 50) return undefined;
+  return store || null;
+}

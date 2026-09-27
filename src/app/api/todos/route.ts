@@ -23,7 +23,7 @@ export async function GET(request: Request) {
 
   const supabase = createAdminClient();
 
-  const [{ data: recurring }, { data: oneOff }] = await Promise.all([
+  const [{ data: recurring, error: recurringError }, { data: oneOff, error: oneOffError }] = await Promise.all([
     supabase.from("note_recurring_todos").select("id, title, weekdays, created_at").order("created_at", { ascending: true }),
     supabase
       .from("note_todos")
@@ -32,10 +32,13 @@ export async function GET(request: Request) {
       .or(`due_date.is.null,due_date.lte.${date}`)
       .order("created_at", { ascending: true }),
   ]);
+  // 에러를 빈 목록으로 삼키면 화면에서 "할 일 없음"으로 보이므로 그대로 실패 처리
+  const listError = recurringError ?? oneOffError;
+  if (listError) return NextResponse.json({ error: listError.message }, { status: 500 });
 
   let doneMap: Record<string, boolean> = {};
   if (recurring && recurring.length > 0) {
-    const { data: logs } = await supabase
+    const { data: logs, error: logsError } = await supabase
       .from("note_recurring_todo_logs")
       .select("todo_id, done")
       .eq("log_date", date)
@@ -43,6 +46,7 @@ export async function GET(request: Request) {
         "todo_id",
         recurring.map((t) => t.id),
       );
+    if (logsError) return NextResponse.json({ error: logsError.message }, { status: 500 });
     doneMap = Object.fromEntries((logs ?? []).map((l) => [l.todo_id, l.done]));
   }
 

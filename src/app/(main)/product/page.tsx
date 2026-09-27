@@ -2,18 +2,62 @@
 
 import { useEffect, useState } from "react";
 import { LedgerCheck } from "@/components/ledger-check";
-import { EditButton, InlineEdit } from "@/components/inline-edit";
+import { DeleteButton, EditActions, EditButton } from "@/components/inline-edit";
+import { AddIcon, PageHeader, Section } from "@/components/page";
 import { getJson, send } from "@/lib/api";
 
 type Product = {
   id: string;
   name: string;
   done: boolean;
+  store: string | null;
 };
+
+const NO_STORE = "구매처 미정";
+const STORE_LIST_ID = "store-options";
+
+function ProductEditor({
+  product,
+  onSave,
+  onCancel,
+}: {
+  product: Product;
+  onSave: (name: string, store: string) => void;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState(product.name);
+  const [store, setStore] = useState(product.store ?? "");
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    const next = name.trim();
+    if (!next || (next === product.name && store.trim() === (product.store ?? ""))) return onCancel();
+    onSave(next, store.trim());
+  }
+
+  return (
+    <form onSubmit={submit} onKeyDown={(e) => e.key === "Escape" && onCancel()} className="w-full space-y-2 py-2">
+      <input autoFocus value={name} onChange={(e) => setName(e.target.value)} aria-label="물건" className="field" />
+      <div className="flex flex-wrap items-center gap-3">
+        <input
+          value={store}
+          onChange={(e) => setStore(e.target.value)}
+          list={STORE_LIST_ID}
+          maxLength={50}
+          placeholder="구매처 (선택)"
+          aria-label="구매처"
+          className="field field-sm min-w-0 flex-1"
+        />
+        <EditActions onCancel={onCancel} />
+      </div>
+    </form>
+  );
+}
 
 export default function ProductPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [name, setName] = useState("");
+  const [store, setStore] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
 
   async function load() {
@@ -29,7 +73,8 @@ export default function ProductPage() {
   async function addProduct(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
-    if (!(await send("/api/products", "POST", { name: name.trim() }))) return;
+    if (!(await send("/api/products", "POST", { name: name.trim(), store: store.trim() }))) return;
+    // 같은 곳에서 여러 개 살 때가 많아서 구매처는 남겨둠
     setName("");
     load();
   }
@@ -39,10 +84,10 @@ export default function ProductPage() {
     if (!(await send(`/api/products/${id}`, "PATCH", { done: !current }))) load();
   }
 
-  async function rename(id: string, next: string) {
+  async function saveEdit(id: string, nextName: string, nextStore: string) {
     setEditingId(null);
-    setProducts((list) => list.map((p) => (p.id === id ? { ...p, name: next } : p)));
-    if (!(await send(`/api/products/${id}`, "PATCH", { name: next }))) load();
+    setProducts((list) => list.map((p) => (p.id === id ? { ...p, name: nextName, store: nextStore || null } : p)));
+    if (!(await send(`/api/products/${id}`, "PATCH", { name: nextName, store: nextStore }))) load();
   }
 
   async function remove(id: string) {
@@ -51,97 +96,138 @@ export default function ProductPage() {
   }
 
   async function clearDone() {
-    if (!confirm(`완료한 ${doneCount}개 항목을 지울까요?`)) return;
+    if (!confirm(`산 물건 ${doneCount}개를 목록에서 지울까요?`)) return;
     setProducts((list) => list.filter((p) => !p.done));
     if (!(await send("/api/products?done=true", "DELETE"))) load();
   }
 
   const doneCount = products.filter((p) => p.done).length;
   const remaining = products.length - doneCount;
+  // 자동완성/빠른 선택용. 자주 쓴 구매처 먼저
+  const storeCounts = products.reduce<Record<string, number>>((acc, p) => {
+    if (p.store) acc[p.store] = (acc[p.store] ?? 0) + 1;
+    return acc;
+  }, {});
+  const knownStores = Object.keys(storeCounts).sort((a, b) => storeCounts[b] - storeCounts[a]);
+
+  // 구매처별로 묶고, 미정은 맨 아래. 묶음 안에서는 안 산 것 먼저
+  const groups = Object.entries(
+    products.reduce<Record<string, Product[]>>((acc, p) => {
+      (acc[p.store ?? NO_STORE] ??= []).push(p);
+      return acc;
+    }, {}),
+  )
+    .map(([key, items]) => [key, [...items].sort((a, b) => Number(a.done) - Number(b.done))] as const)
+    .sort(([a], [b]) => (a === NO_STORE ? 1 : b === NO_STORE ? -1 : a.localeCompare(b, "ko")));
 
   return (
-    <div className="mx-auto max-w-md px-5 pt-8">
-      <header className="mb-7">
-        <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted">
-          장바구니
-        </p>
-        <h1 className="mt-1 flex items-center gap-2 text-2xl font-semibold tracking-tight">
-          <span className="inline-block h-3 w-3 rounded-[3px] bg-accent-2" />
-          product
-        </h1>
-      </header>
+    <>
+      <PageHeader
+        title="장보기"
+        sub={products.length === 0 ? "살 것을 적어두세요" : remaining > 0 ? `살 것 ${remaining}개` : "다 샀어요"}
+      />
 
-      <form onSubmit={addProduct} className="mb-8 flex items-end gap-3">
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="살 것 추가"
-          className="ledger-input"
-        />
-        <button
-          type="submit"
-          aria-label="추가"
-          className="grid h-9 w-9 flex-none place-items-center rounded-full bg-accent text-white transition-transform active:scale-95"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-            <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-          </svg>
-        </button>
+      <datalist id={STORE_LIST_ID}>
+        {knownStores.map((s) => (
+          <option key={s} value={s} />
+        ))}
+      </datalist>
+
+      <form onSubmit={addProduct} className="composer space-y-3">
+        <label htmlFor="new-product" className="composer-label">
+          살 것 추가
+        </label>
+        <div className="flex items-center gap-3">
+          <input
+            id="new-product"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="예: 우유, 휴지"
+            className="composer-input"
+          />
+          <button type="submit" aria-label="추가" className="add-btn">
+            <AddIcon />
+          </button>
+        </div>
+        <div className="border-t pt-3">
+          <label className="flex items-center gap-3">
+            <span className="flex-none text-[13px] font-medium text-pencil">구매처</span>
+            <input
+              value={store}
+              onChange={(e) => setStore(e.target.value)}
+              list={STORE_LIST_ID}
+              maxLength={50}
+              placeholder="예: 쿠팡, 이마트 (선택)"
+              className="field field-sm min-w-0 flex-1"
+            />
+          </label>
+          {knownStores.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {knownStores.slice(0, 6).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setStore(store === s ? "" : s)}
+                  aria-pressed={store === s}
+                  className="chip h-7 px-3"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </form>
 
-      <section className="rounded-xl border bg-surface p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.14em] text-muted">
-            <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent-2" />
-            목록
-          </h2>
-          <div className="flex items-center gap-3 font-mono text-[11px] text-muted">
-            {doneCount > 0 && (
-              <button type="button" onClick={clearDone} className="hover:text-accent">
-                완료 비우기
-              </button>
-            )}
-            <span>{remaining}개 남음</span>
-          </div>
-        </div>
-
-        {products.length > 0 ? (
-          <ul className="space-y-3">
-            {products.map((p) => (
-              <li key={p.id} className="flex items-center gap-2">
-                {editingId === p.id ? (
-                  <InlineEdit
-                    value={p.name}
-                    onSave={(next) => rename(p.id, next)}
-                    onCancel={() => setEditingId(null)}
-                    className="flex-1"
-                  />
-                ) : (
-                  <>
-                    <LedgerCheck checked={p.done} onChange={() => toggle(p.id, p.done)} className="flex-1">
-                      {p.name}
-                    </LedgerCheck>
-                    <EditButton onClick={() => setEditingId(p.id)} />
-                    <button
-                      onClick={() => remove(p.id)}
-                      aria-label="삭제"
-                      className="grid h-6 w-6 flex-none place-items-center rounded-full text-muted transition-colors hover:bg-accent-soft hover:text-accent"
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                        <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                      </svg>
-                    </button>
-                  </>
-                )}
-              </li>
-            ))}
-          </ul>
+      <Section
+        title="목록"
+        aside={
+          doneCount > 0 ? (
+            <button type="button" onClick={clearDone} className="text-btn">
+              산 것 {doneCount}개 지우기
+            </button>
+          ) : undefined
+        }
+      >
+        {groups.length > 0 ? (
+          groups.map(([key, items]) => (
+            <div key={key}>
+              <h3
+                className="mt-5 flex items-baseline justify-between text-[13px] font-semibold"
+                style={{ color: key === NO_STORE ? "var(--pencil)" : "var(--navy)" }}
+              >
+                {key}
+                <span className="font-normal text-pencil">
+                  {items.filter((p) => !p.done).length} / {items.length}
+                </span>
+              </h3>
+              <ul>
+                {items.map((p) => (
+                  <li key={p.id} className="row">
+                    {editingId === p.id ? (
+                      <ProductEditor
+                        product={p}
+                        onSave={(nextName, nextStore) => saveEdit(p.id, nextName, nextStore)}
+                        onCancel={() => setEditingId(null)}
+                      />
+                    ) : (
+                      <>
+                        <LedgerCheck checked={p.done} onChange={() => toggle(p.id, p.done)}>
+                          {p.name}
+                        </LedgerCheck>
+                        <EditButton onClick={() => setEditingId(p.id)} />
+                        <DeleteButton onClick={() => remove(p.id)} />
+                      </>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))
         ) : (
-          <p className="rounded-lg border border-dashed py-4 text-center text-sm text-muted">
-            목록 비어있음
-          </p>
+          <p className="empty">목록이 비어 있어요.</p>
         )}
-      </section>
-    </div>
+      </Section>
+    </>
   );
 }

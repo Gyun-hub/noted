@@ -6,7 +6,9 @@ import { LedgerCheck } from "@/components/ledger-check";
 import { DeleteButton, EditActions, EditButton, InlineEdit } from "@/components/inline-edit";
 import { WeekdayPicker, runsOn, weekdaysLabel } from "@/components/weekday-picker";
 import { RecurringHistory, STREAK_WINDOW, addDays } from "@/components/recurring-history";
+import { AddIcon, PageHeader, Section } from "@/components/page";
 import { getJson, send } from "@/lib/api";
+import { isMultiDay, rangeLabel, timeLabelOn, type EventRow } from "@/lib/events";
 import { dismissToast, showToast } from "@/lib/toast";
 
 type Todo = {
@@ -21,14 +23,8 @@ type RecurringTodo = Todo & {
   created_at: string;
 };
 
-type Event = {
-  id: string;
-  title: string;
-  event_time: string | null;
-};
-
 type TodosResponse = { recurring: RecurringTodo[]; oneOff: Todo[] };
-type EventsResponse = { events: Event[] };
+type EventsResponse = { events: EventRow[] };
 type HistoryResponse = { logs: { todo_id: string; log_date: string; done: boolean }[] };
 
 const UNDO_MS = 4000;
@@ -39,15 +35,7 @@ function toDateStr(d: Date) {
 }
 
 function todayLabel() {
-  return new Intl.DateTimeFormat("ko-KR", {
-    month: "2-digit",
-    day: "2-digit",
-    weekday: "short",
-  })
-    .format(new Date())
-    .replace(/\./g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+  return new Intl.DateTimeFormat("ko-KR", { month: "long", day: "numeric", weekday: "long" }).format(new Date());
 }
 
 function RecurringEditor({
@@ -73,13 +61,13 @@ function RecurringEditor({
     <form
       onSubmit={submit}
       onKeyDown={(e) => e.key === "Escape" && onCancel()}
-      className="flex flex-1 items-end gap-1"
+      className="w-full space-y-3 py-2"
     >
-      <div className="flex-1 space-y-2">
-        <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} className="ledger-input" />
-        <WeekdayPicker value={weekdays} onChange={setWeekdays} />
+      <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} className="field" />
+      <WeekdayPicker value={weekdays} onChange={setWeekdays} />
+      <div className="flex justify-end">
+        <EditActions onCancel={onCancel} />
       </div>
-      <EditActions onCancel={onCancel} />
     </form>
   );
 }
@@ -87,7 +75,7 @@ function RecurringEditor({
 export default function TodayPage() {
   const [recurring, setRecurring] = useState<RecurringTodo[]>([]);
   const [oneOff, setOneOff] = useState<Todo[]>([]);
-  const [events, setEvents] = useState<Event[]>([]);
+  const [events, setEvents] = useState<EventRow[]>([]);
   // 반복 관리 펼쳤을 때만 불러옴. `${todo_id}|${date}` 완료 기록
   const [history, setHistory] = useState<Set<string> | null>(null);
   const [title, setTitle] = useState("");
@@ -163,7 +151,7 @@ export default function TodayPage() {
     if (done) {
       if (undoTimer.current) clearTimeout(undoTimer.current);
       if (undoToast.current) dismissToast(undoToast.current);
-      undoToast.current = showToast(`완료 · ${todo.title}`, {
+      undoToast.current = showToast(`"${todo.title}" 완료`, {
         duration: UNDO_MS,
         action: { label: "되돌리기", onClick: () => toggleOneOff({ ...todo, done: true }) },
       });
@@ -203,111 +191,102 @@ export default function TodayPage() {
 
   const todayRecurring = recurring.filter((t) => runsOn(t.weekdays, weekday));
   const doneCount = todayRecurring.filter((t) => t.done).length;
+  const allRecurringDone = todayRecurring.length > 0 && doneCount === todayRecurring.length;
+  const openOneOff = oneOff.filter((t) => !t.done).length;
+  const leftCount = openOneOff + todayRecurring.length - doneCount;
 
   return (
-    <div className="mx-auto max-w-md px-5 pt-8">
-      <header className="mb-7">
-        <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted">
-          {todayLabel()}
-        </p>
-        <h1 className="mt-1 flex items-center gap-2 text-2xl font-semibold tracking-tight">
-          <span className="inline-block h-3 w-3 rounded-[3px] bg-accent" />
-          today
-        </h1>
-      </header>
+    <>
+      <PageHeader title={todayLabel()} sub={leftCount > 0 ? `남은 일 ${leftCount}개` : "오늘 할 일을 모두 끝냈어요"}>
+        {allRecurringDone && (
+          <div className="pointer-events-none absolute right-5 top-24" role="img" aria-label="오늘 반복 완료">
+            <span className="stamp">
+              참<br />
+              잘했어요
+            </span>
+          </div>
+        )}
+      </PageHeader>
 
       {events.length > 0 && (
-        <section className="mb-6 rounded-xl border bg-surface p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.14em] text-muted">
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent" />
-              오늘 일정
-            </h2>
-            <Link href="/calendar" className="font-mono text-[11px] text-muted hover:text-accent">
-              calendar →
+        <Section
+          title="오늘 일정"
+          tone="navy"
+          aside={
+            <Link href="/calendar" className="text-btn">
+              달력에서 보기
             </Link>
-          </div>
-          <ul className="space-y-2">
+          }
+        >
+          <ul>
             {events.map((e) => (
-              <li key={e.id} className="flex items-baseline gap-3 text-sm">
-                <span className="w-10 flex-none font-mono text-[11px] text-muted">
-                  {e.event_time ? e.event_time.slice(0, 5) : "종일"}
+              <li key={e.id} className="row">
+                <span className="w-[4.5rem] flex-none text-[13px] font-semibold leading-tight text-navy">
+                  {timeLabelOn(e, date)}
                 </span>
-                <span className="flex-1">{e.title}</span>
+                <span className="min-w-0 flex-1">
+                  {e.title}
+                  {isMultiDay(e) && <span className="block text-[12px] text-pencil">{rangeLabel(e)}</span>}
+                </span>
               </li>
             ))}
           </ul>
-        </section>
+        </Section>
       )}
 
-      <form onSubmit={addTodo} className="mb-8 space-y-3">
-        <div className="flex items-end gap-3">
+      <form onSubmit={addTodo} className="composer space-y-3">
+        <label htmlFor="new-todo" className="composer-label">
+          할 일 추가
+        </label>
+        <div className="flex items-center gap-3">
           <input
+            id="new-todo"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="할 일 추가"
-            className="ledger-input"
+            placeholder={isRecurring ? "매일 또는 요일마다 할 일" : "오늘 할 일을 적어주세요"}
+            className="composer-input"
           />
-          <button
-            type="submit"
-            aria-label="추가"
-            className="grid h-9 w-9 flex-none place-items-center rounded-full bg-accent text-white transition-transform active:scale-95"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-              <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            </svg>
+          <button type="submit" aria-label="추가" className="add-btn">
+            <AddIcon />
           </button>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3 border-t pt-3">
           <button
             type="button"
             onClick={() => setIsRecurring((v) => !v)}
             aria-pressed={isRecurring}
-            className="rounded-full border px-3 py-1 font-mono text-[11px] uppercase tracking-wide transition-colors"
-            style={
-              isRecurring
-                ? { background: "var(--accent-2-soft)", borderColor: "var(--accent-2)", color: "var(--accent-2)" }
-                : { color: "var(--text-muted)" }
-            }
+            data-tone="blue"
+            className="chip"
           >
             반복
           </button>
-          {isRecurring && <WeekdayPicker value={weekdays} onChange={setWeekdays} />}
+          {isRecurring ? (
+            <WeekdayPicker value={weekdays} onChange={setWeekdays} />
+          ) : (
+            <span className="text-[13px] text-pencil">반복을 켜면 요일을 고를 수 있어요</span>
+          )}
         </div>
       </form>
 
       {todayRecurring.length > 0 && (
-        <section className="mb-6 rounded-xl border bg-surface p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.14em] text-muted">
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent-2" />
-              반복 스케줄
-            </h2>
-            <span className="font-mono text-[11px] text-muted">
-              {doneCount}/{todayRecurring.length}
-            </span>
-          </div>
-          <ul className="space-y-3">
+        <Section title="반복" tone="blue" aside={`${doneCount} / ${todayRecurring.length}`}>
+          <ul>
             {todayRecurring.map((t) => (
-              <li key={t.id}>
-                <LedgerCheck checked={t.done} onChange={() => toggleRecurring(t.id, t.done)}>
+              <li key={t.id} className="row">
+                <LedgerCheck checked={t.done} onChange={() => toggleRecurring(t.id, t.done)} tone="blue">
                   {t.title}
                 </LedgerCheck>
               </li>
             ))}
           </ul>
-        </section>
+        </Section>
       )}
 
-      <section className="mb-6 rounded-xl border bg-surface p-4">
-        <h2 className="mb-3 flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.14em] text-muted">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent" />할 일
-        </h2>
-
+      <Section title="할 일" aside={oneOff.length > 0 ? `${openOneOff}개` : undefined}>
         {oneOff.length > 0 ? (
-          <ul className="space-y-3">
+          <ul>
             {oneOff.map((t) => (
-              <li key={t.id} className="flex items-center gap-2">
+              <li key={t.id} className="row">
                 {editingId === t.id ? (
                   <InlineEdit
                     value={t.title}
@@ -317,14 +296,14 @@ export default function TodayPage() {
                   />
                 ) : (
                   <>
-                    <LedgerCheck checked={t.done} onChange={() => toggleOneOff(t)} className="flex-1">
+                    <LedgerCheck checked={t.done} onChange={() => toggleOneOff(t)}>
                       {t.title}
+                      {t.due_date && t.due_date < date && (
+                        <span className="ml-2 whitespace-nowrap rounded bg-navy-soft px-1.5 py-0.5 text-[11px] font-semibold text-navy">
+                          {Number(t.due_date.slice(5, 7))}/{Number(t.due_date.slice(8))}부터
+                        </span>
+                      )}
                     </LedgerCheck>
-                    {t.due_date && t.due_date < date && (
-                      <span className="flex-none font-mono text-[10px] text-accent">
-                        {t.due_date.slice(5).replace("-", ".")}
-                      </span>
-                    )}
                     <EditButton onClick={() => setEditingId(t.id)} />
                     <DeleteButton onClick={() => removeOneOff(t)} />
                   </>
@@ -333,42 +312,49 @@ export default function TodayPage() {
             ))}
           </ul>
         ) : (
-          <p className="rounded-lg border border-dashed py-4 text-center text-sm text-muted">
-            남은 할 일 없음
-          </p>
+          <p className="empty">남은 할 일이 없어요. 위 입력칸에 새로 적어보세요.</p>
         )}
-      </section>
+      </Section>
 
       {recurring.length > 0 && (
         <details
-          className="group rounded-xl border bg-surface p-4"
+          className="group"
           onToggle={(e) => {
             if (e.currentTarget.open && !history) loadHistory();
           }}
         >
-          <summary className="flex cursor-pointer list-none items-center justify-between font-mono text-[11px] uppercase tracking-[0.14em] text-muted">
-            <span className="flex items-center gap-2">
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent-2" />
-              반복 관리
+          <summary className="section-head cursor-pointer list-none" style={{ borderBottomColor: "var(--rule)" }}>
+            <span className="text-pencil">반복 관리</span>
+            <span className="aside flex items-center gap-1">
+              {recurring.length}개
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                className="transition-transform group-open:rotate-180"
+                aria-hidden="true"
+              >
+                <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             </span>
-            <span className="transition-transform group-open:rotate-90">›</span>
           </summary>
-          <ul className="mt-3 space-y-4">
+          <ul>
             {recurring.map((t) => (
-              <li key={t.id} className="text-sm">
+              <li key={t.id} className="border-b py-3">
                 {editingId === t.id ? (
-                  <div className="flex">
-                    <RecurringEditor
-                      todo={t}
-                      onSave={(next, nextWeekdays) => saveRecurring(t.id, next, nextWeekdays)}
-                      onCancel={() => setEditingId(null)}
-                    />
-                  </div>
+                  <RecurringEditor
+                    todo={t}
+                    onSave={(next, nextWeekdays) => saveRecurring(t.id, next, nextWeekdays)}
+                    onCancel={() => setEditingId(null)}
+                  />
                 ) : (
                   <>
                     <div className="flex items-center gap-2">
-                      <span className="flex-1">{t.title}</span>
-                      <span className="flex-none font-mono text-[10px] text-muted">{weekdaysLabel(t.weekdays)}</span>
+                      <span className="min-w-0 flex-1">
+                        {t.title}
+                        <span className="ml-2 text-[13px] text-blue">{weekdaysLabel(t.weekdays)}</span>
+                      </span>
                       <EditButton onClick={() => setEditingId(t.id)} />
                       <DeleteButton onClick={() => removeRecurring(t)} />
                     </div>
@@ -387,6 +373,6 @@ export default function TodayPage() {
           </ul>
         </details>
       )}
-    </div>
+    </>
   );
 }

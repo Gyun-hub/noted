@@ -2,24 +2,43 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
 import { Toaster } from "@/components/toaster";
 import { send } from "@/lib/api";
 
-const links = [
-  { href: "/today", label: "today" },
-  { href: "/calendar", label: "calendar" },
-  { href: "/product", label: "product" },
-  { href: "/idea", label: "idea" },
+const tabs = [
+  {
+    href: "/today",
+    label: "오늘",
+    icon: <path d="M5 12.5l4.5 4.5L19 7.5" />,
+  },
+  {
+    href: "/calendar",
+    label: "달력",
+    icon: (
+      <>
+        <rect x="4" y="5.5" width="16" height="14" rx="2" />
+        <path d="M4 10h16M8.5 3.5v4M15.5 3.5v4" />
+      </>
+    ),
+  },
+  {
+    href: "/product",
+    label: "장보기",
+    icon: <path d="M4 5h2l2 10h10l2-7H7.2M10 19.5h.01M17 19.5h.01" />,
+  },
+  {
+    href: "/idea",
+    label: "아이디어",
+    icon: <path d="M9 18h6M10 21h4M12 3a6 6 0 00-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0012 3z" />,
+  },
 ];
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [open, setOpen] = useState(false);
 
-  async function logout() {
-    if (!confirm("로그아웃할까요?")) return;
+  async function lock() {
+    if (!confirm("잠글까요? 다시 열려면 PIN이 필요합니다.")) return;
     if (!(await send("/api/auth/logout", "POST"))) return;
     router.replace("/login");
     router.refresh();
@@ -27,64 +46,72 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
 
   return (
     <div className="relative min-h-dvh">
-      <main className="pb-10">{children}</main>
-      <Toaster />
-
       <button
         type="button"
-        aria-label={open ? "메뉴 닫기" : "메뉴 열기"}
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-        className="fixed right-4 top-4 z-30 grid h-10 w-10 place-items-center rounded-full border bg-surface"
+        onClick={lock}
+        aria-label="잠그기"
+        className="icon-btn fixed z-30"
+        style={{ top: "calc(1.25rem + env(safe-area-inset-top))", right: "1rem" }}
       >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-          {open ? (
-            <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-          ) : (
-            <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-          )}
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <rect x="5" y="10.5" width="14" height="10" rx="2" stroke="currentColor" strokeWidth="1.7" />
+          <path d="M8.5 10.5V8a3.5 3.5 0 017 0v2.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
         </svg>
       </button>
 
-      {open && (
-        <>
-          <button
-            type="button"
-            aria-label="메뉴 배경 닫기"
-            onClick={() => setOpen(false)}
-            className="fixed inset-0 z-20 bg-black/10"
-          />
-          <nav className="fixed right-4 top-16 z-30 w-40 overflow-hidden rounded-xl border bg-surface p-1">
-            {links.map(({ href, label }) => {
-              const active = pathname?.startsWith(href);
-              return (
+      <main
+        className="mx-auto max-w-md px-5"
+        style={{
+          paddingTop: "calc(2.5rem + env(safe-area-inset-top))",
+          paddingBottom: "calc(7rem + env(safe-area-inset-bottom))",
+        }}
+      >
+        {children}
+      </main>
+
+      <Toaster />
+
+      <nav
+        className="fixed inset-x-0 bottom-0 z-30 border-t bg-sheet"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
+        <ul className="mx-auto flex max-w-md">
+          {tabs.map(({ href, label, icon }) => {
+            const active = pathname?.startsWith(href);
+            return (
+              <li key={href} className="flex-1">
                 <Link
-                  key={href}
                   href={href}
-                  onClick={() => setOpen(false)}
-                  className="flex items-center gap-2 rounded-lg px-3 py-2 font-mono text-[11px] uppercase tracking-wide"
-                  style={{ color: active ? "var(--accent)" : "var(--text)" }}
+                  aria-current={active ? "page" : undefined}
+                  className="relative flex h-16 flex-col items-center justify-center gap-1 text-[11px] font-medium"
+                  style={{ color: active ? "var(--navy)" : "var(--pencil)" }}
                 >
-                  <span
-                    className="h-1.5 w-1.5 rounded-full"
-                    style={{ background: active ? "var(--accent)" : "var(--border-strong)" }}
-                  />
+                  {active && (
+                    <span
+                      className="absolute top-0 h-[3px] w-8 rounded-b-full"
+                      style={{ background: "var(--mint)" }}
+                    />
+                  )}
+                  <svg
+                    width="22"
+                    height="22"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={active ? 2.1 : 1.7}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    {icon}
+                  </svg>
                   {label}
                 </Link>
-              );
-            })}
-            <div className="my-1 border-t" />
-            <button
-              type="button"
-              onClick={logout}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 font-mono text-[11px] uppercase tracking-wide text-muted hover:text-accent"
-            >
-              <span className="h-1.5 w-1.5 rounded-full" />
-              logout
-            </button>
-          </nav>
-        </>
-      )}
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
     </div>
   );
 }

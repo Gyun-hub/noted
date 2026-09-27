@@ -61,25 +61,27 @@ export function RecurringHistory(props: Props) {
   const { days, streak, capped, rate } = stats(props);
 
   return (
-    <div className="mt-2 space-y-1.5">
-      <div className="flex gap-[3px]">
+    <div className="mt-2">
+      <div className="flex gap-[3px]" aria-hidden="true">
         {days.map((d) => (
           <span
             key={d.date}
             title={d.date}
-            className="h-2.5 flex-1 rounded-[2px]"
+            className="h-3 flex-1 rounded-[3px]"
             style={{
-              background: !d.scheduled ? "transparent" : d.done ? "var(--accent-2)" : "var(--border-strong)",
-              opacity: d.scheduled && !d.done ? 0.35 : 1,
-              outline: d.date === props.today ? "1px solid var(--accent-2)" : undefined,
-              outlineOffset: 1,
+              background: !d.scheduled ? "transparent" : d.done ? "var(--blue)" : "var(--rule)",
+              boxShadow: d.date === props.today ? "0 0 0 1.5px var(--navy)" : undefined,
             }}
           />
         ))}
       </div>
-      <p className="font-mono text-[10px] text-muted">
-        연속 {streak}
-        {capped ? "+" : ""}일 · 최근 {HISTORY_DAYS}일 {rate === null ? "-" : `${rate}%`}
+      <p className="mt-1.5 flex gap-4 text-[13px] text-pencil">
+        <span>
+          연속 <strong className="font-semibold text-ink">{streak}{capped ? "+" : ""}일</strong>
+        </span>
+        <span>
+          최근 {HISTORY_DAYS}일 <strong className="font-semibold text-ink">{rate === null ? "-" : `${rate}%`}</strong>
+        </span>
       </p>
     </div>
   );

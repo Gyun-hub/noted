@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { getJson, send } from "@/lib/api";
 import { showToast } from "@/lib/toast";
-import { EditActions, EditButton, InlineEdit } from "@/components/inline-edit";
+import { DeleteButton, EditActions, EditButton, InlineEdit } from "@/components/inline-edit";
+import { PageHeader, Section } from "@/components/page";
 
 type Idea = {
   id: string;
@@ -18,11 +19,15 @@ function toDateStr(d: Date) {
 
 function formatDate(iso: string) {
   return new Intl.DateTimeFormat("ko-KR", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
+    month: "long",
+    day: "numeric",
+    hour: "numeric",
     minute: "2-digit",
   }).format(new Date(iso));
+}
+
+function shortDate(date: string) {
+  return `${Number(date.slice(5, 7))}월 ${Number(date.slice(8))}일`;
 }
 
 export default function IdeaPage() {
@@ -56,9 +61,10 @@ export default function IdeaPage() {
     if (!(await send(`/api/ideas/${id}`, "PATCH", { content: next }))) load();
   }
 
-  async function remove(id: string) {
-    setIdeas((list) => list.filter((i) => i.id !== id));
-    if (!(await send(`/api/ideas/${id}`, "DELETE"))) load();
+  async function remove(idea: Idea) {
+    if (!confirm("이 아이디어를 지울까요?")) return;
+    setIdeas((list) => list.filter((i) => i.id !== idea.id));
+    if (!(await send(`/api/ideas/${idea.id}`, "DELETE"))) load();
   }
 
   function startConvert(id: string) {
@@ -74,118 +80,97 @@ export default function IdeaPage() {
     if (!title || !convertDate) return;
     if (!(await send("/api/todos", "POST", { title, dueDate: convertDate }))) return;
     setConvertingId(null);
-    showToast(`할 일로 등록 · ${convertDate.slice(5).replace("-", ".")}`);
+    showToast(`${shortDate(convertDate)} 할 일로 추가했어요`);
   }
 
   return (
-    <div className="mx-auto max-w-md px-5 pt-8">
-      <header className="mb-7">
-        <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-muted">
-          아이디어 노트
-        </p>
-        <h1 className="mt-1 flex items-center gap-2 text-2xl font-semibold tracking-tight">
-          <span className="inline-block h-3 w-3 rounded-[3px] bg-accent" />
-          idea
-        </h1>
-      </header>
+    <>
+      <PageHeader title="아이디어" sub={ideas.length > 0 ? `${ideas.length}개 적어둠` : "떠오른 걸 바로 적어두세요"} />
 
-      <form onSubmit={addIdea} className="mb-8 space-y-3">
+      <form onSubmit={addIdea} className="composer">
+        <label htmlFor="new-idea" className="composer-label">
+          아이디어 적기
+        </label>
         <textarea
+          id="new-idea"
           value={content}
           onChange={(e) => setContent(e.target.value)}
-          placeholder="구현하고 싶은 것 적기"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) addIdea(e);
+          }}
+          placeholder="만들고 싶은 것, 해보고 싶은 것"
           rows={3}
-          className="ledger-input resize-none"
+          className="composer-input resize-none"
         />
-        <button
-          type="submit"
-          className="w-full rounded-full bg-accent py-2.5 text-sm font-medium text-white transition-transform active:scale-[0.98]"
-        >
-          기록
-        </button>
+        <div className="mt-2 flex items-center justify-between border-t pt-3">
+          <span className="text-[13px] text-pencil">첫 줄이 제목이 돼요</span>
+          <button type="submit" className="h-9 rounded-full bg-navy px-5 text-sm font-semibold text-paper">
+            저장
+          </button>
+        </div>
       </form>
 
-      <section className="rounded-xl border bg-surface p-4">
-        <h2 className="mb-3 flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.14em] text-muted">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent-2" />
-          기록됨
-        </h2>
-
+      <Section title="적어둔 것" aside={ideas.length > 0 ? `${ideas.length}개` : undefined}>
         {ideas.length > 0 ? (
-          <ul className="space-y-3">
-            {ideas.map((idea) => (
-              <li key={idea.id} className="rounded-lg border border-dashed p-3">
-                <div className="mb-1 flex items-start justify-between gap-2">
-                  <span className="font-mono text-[10px] uppercase tracking-wide text-muted">
-                    {formatDate(idea.created_at)}
-                  </span>
-                  {editingId !== idea.id && (
-                    <div className="flex items-center">
-                      <button
-                        type="button"
-                        onClick={() => startConvert(idea.id)}
-                        aria-label="할 일로 등록"
-                        className="grid h-6 w-6 flex-none place-items-center rounded-full text-muted transition-colors hover:bg-accent-2-soft hover:text-accent-2"
-                      >
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                          <path
-                            d="M4 12.5l4.5 4.5L20 5.5M14 19h6"
-                            stroke="currentColor"
-                            strokeWidth="1.8"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      </button>
-                      <EditButton onClick={() => setEditingId(idea.id)} />
-                      <button
-                        onClick={() => remove(idea.id)}
-                        aria-label="삭제"
-                        className="grid h-5 w-5 flex-none place-items-center rounded-full text-muted transition-colors hover:bg-accent-soft hover:text-accent"
-                      >
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
-                          <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                        </svg>
-                      </button>
-                    </div>
-                  )}
-                </div>
-                {editingId === idea.id ? (
-                  <InlineEdit
-                    value={idea.content}
-                    multiline
-                    onSave={(next) => saveEdit(idea.id, next)}
-                    onCancel={() => setEditingId(null)}
-                  />
-                ) : (
-                  <p className="whitespace-pre-wrap text-sm">{idea.content}</p>
-                )}
-                {convertingId === idea.id && (
-                  <form
-                    onSubmit={(e) => convertToTodo(e, idea)}
-                    onKeyDown={(e) => e.key === "Escape" && setConvertingId(null)}
-                    className="mt-3 flex items-center gap-2 border-t border-dashed pt-3"
-                  >
-                    <span className="flex-none font-mono text-[10px] uppercase tracking-wide text-accent-2">할 일로</span>
-                    <input
-                      type="date"
-                      required
-                      value={convertDate}
-                      onChange={(e) => setConvertDate(e.target.value)}
-                      className="ledger-input flex-1 py-1 font-mono text-xs"
+          <ul>
+            {ideas.map((idea) => {
+              const [first, ...rest] = idea.content.split("\n");
+              const body = rest.join("\n").trim();
+              return (
+                <li key={idea.id} className="border-b py-4">
+                  {editingId === idea.id ? (
+                    <InlineEdit
+                      value={idea.content}
+                      multiline
+                      onSave={(next) => saveEdit(idea.id, next)}
+                      onCancel={() => setEditingId(null)}
                     />
-                    <EditActions onCancel={() => setConvertingId(null)} />
-                  </form>
-                )}
-              </li>
-            ))}
+                  ) : (
+                    <>
+                      <p className="font-semibold">{first}</p>
+                      {body && <p className="mt-1 whitespace-pre-wrap text-sm text-pencil">{body}</p>}
+                      <div className="mt-2 flex items-center gap-1">
+                        <time className="flex-1 text-[12px] text-pencil">{formatDate(idea.created_at)}</time>
+                        <button
+                          type="button"
+                          onClick={() => startConvert(idea.id)}
+                          className="h-8 rounded-full px-3 text-[13px] font-medium text-blue hover:bg-blue-soft"
+                        >
+                          할 일로
+                        </button>
+                        <EditButton onClick={() => setEditingId(idea.id)} />
+                        <DeleteButton onClick={() => remove(idea)} />
+                      </div>
+                    </>
+                  )}
+                  {convertingId === idea.id && (
+                    <form
+                      onSubmit={(e) => convertToTodo(e, idea)}
+                      onKeyDown={(e) => e.key === "Escape" && setConvertingId(null)}
+                      className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-blue-soft p-3"
+                    >
+                      <label htmlFor={`convert-${idea.id}`} className="text-[13px] font-medium text-blue">
+                        언제 할까요?
+                      </label>
+                      <input
+                        id={`convert-${idea.id}`}
+                        type="date"
+                        required
+                        value={convertDate}
+                        onChange={(e) => setConvertDate(e.target.value)}
+                        className="field field-sm min-w-[9rem] flex-1"
+                      />
+                      <EditActions onCancel={() => setConvertingId(null)} saveLabel="추가" />
+                    </form>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         ) : (
-          <p className="rounded-lg border border-dashed py-4 text-center text-sm text-muted">
-            아직 기록된 아이디어 없음
-          </p>
+          <p className="empty">아직 적어둔 아이디어가 없어요.</p>
         )}
-      </section>
-    </div>
+      </Section>
+    </>
   );
 }
