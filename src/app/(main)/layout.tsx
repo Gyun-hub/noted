@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 
 const links = [
@@ -13,7 +13,15 @@ const links = [
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
+
+  async function logout() {
+    if (!confirm("로그아웃할까요?")) return;
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.replace("/login");
+    router.refresh();
+  }
 
   return (
     <div className="relative min-h-dvh">
@@ -62,6 +70,15 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
                 </Link>
               );
             })}
+            <div className="my-1 border-t" />
+            <button
+              type="button"
+              onClick={logout}
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 font-mono text-[11px] uppercase tracking-wide text-muted hover:text-accent"
+            >
+              <span className="h-1.5 w-1.5 rounded-full" />
+              logout
+            </button>
           </nav>
         </>
       )}

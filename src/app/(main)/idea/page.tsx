@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { EditButton, InlineEdit } from "@/components/inline-edit";
 
 type Idea = {
   id: string;
@@ -20,6 +21,7 @@ function formatDate(iso: string) {
 export default function IdeaPage() {
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [content, setContent] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   async function load() {
     const res = await fetch("/api/ideas");
@@ -41,6 +43,17 @@ export default function IdeaPage() {
       body: JSON.stringify({ content: content.trim() }),
     });
     setContent("");
+    load();
+  }
+
+  async function saveEdit(id: string, next: string) {
+    setEditingId(null);
+    setIdeas((list) => list.map((i) => (i.id === id ? { ...i, content: next } : i)));
+    await fetch(`/api/ideas/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: next }),
+    });
     load();
   }
 
@@ -91,17 +104,31 @@ export default function IdeaPage() {
                   <span className="font-mono text-[10px] uppercase tracking-wide text-muted">
                     {formatDate(idea.created_at)}
                   </span>
-                  <button
-                    onClick={() => remove(idea.id)}
-                    aria-label="삭제"
-                    className="grid h-5 w-5 flex-none place-items-center rounded-full text-muted transition-colors hover:bg-accent-soft hover:text-accent"
-                  >
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
-                      <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                    </svg>
-                  </button>
+                  {editingId !== idea.id && (
+                    <div className="flex items-center">
+                      <EditButton onClick={() => setEditingId(idea.id)} />
+                      <button
+                        onClick={() => remove(idea.id)}
+                        aria-label="삭제"
+                        className="grid h-5 w-5 flex-none place-items-center rounded-full text-muted transition-colors hover:bg-accent-soft hover:text-accent"
+                      >
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
+                          <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                        </svg>
+                      </button>
+                    </div>
+                  )}
                 </div>
-                <p className="whitespace-pre-wrap text-sm">{idea.content}</p>
+                {editingId === idea.id ? (
+                  <InlineEdit
+                    value={idea.content}
+                    multiline
+                    onSave={(next) => saveEdit(idea.id, next)}
+                    onCancel={() => setEditingId(null)}
+                  />
+                ) : (
+                  <p className="whitespace-pre-wrap text-sm">{idea.content}</p>
+                )}
               </li>
             ))}
           </ul>

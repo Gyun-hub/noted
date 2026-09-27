@@ -1,40 +1,38 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { DATE_RE } from "@/lib/validate";
+import { parseWeekdays } from "@/lib/validate";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const body = await request.json().catch(() => null);
 
-  const update: { done?: boolean; title?: string; due_date?: string | null } = {};
-  if (typeof body?.done === "boolean") update.done = body.done;
+  const update: { title?: string; weekdays?: number[] | null } = {};
   if (typeof body?.title === "string") {
     const title = body.title.trim();
     if (!title) return NextResponse.json({ error: "title empty" }, { status: 400 });
     update.title = title;
   }
-  if (body?.dueDate === null) update.due_date = null;
-  else if (typeof body?.dueDate === "string") {
-    if (!DATE_RE.test(body.dueDate)) {
-      return NextResponse.json({ error: "dueDate invalid" }, { status: 400 });
-    }
-    update.due_date = body.dueDate;
+  if (body && "weekdays" in body) {
+    const weekdays = parseWeekdays(body.weekdays);
+    if (weekdays === undefined) return NextResponse.json({ error: "weekdays invalid" }, { status: 400 });
+    update.weekdays = weekdays;
   }
   if (Object.keys(update).length === 0) {
-    return NextResponse.json({ error: "done, title or dueDate required" }, { status: 400 });
+    return NextResponse.json({ error: "title or weekdays required" }, { status: 400 });
   }
 
   const supabase = createAdminClient();
-  const { error } = await supabase.from("note_todos").update(update).eq("id", id);
+  const { error } = await supabase.from("note_recurring_todos").update(update).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({ ok: true });
 }
 
+// 체크 기록(note_recurring_todo_logs)은 on delete cascade로 같이 지워짐
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = createAdminClient();
-  const { error } = await supabase.from("note_todos").delete().eq("id", id);
+  const { error } = await supabase.from("note_recurring_todos").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({ ok: true });

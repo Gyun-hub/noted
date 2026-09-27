@@ -20,6 +20,7 @@ drop table if exists note_recurring_todos;
 create table note_recurring_todos (
   id uuid primary key default gen_random_uuid(),
   title text not null,
+  weekdays smallint[], -- 0(일)~6(토). null = 매일
   created_at timestamptz not null default now()
 );
 
@@ -36,6 +37,7 @@ create table note_todos (
   id uuid primary key default gen_random_uuid(),
   title text not null,
   done boolean not null default false,
+  due_date date,
   created_at timestamptz not null default now()
 );
 
@@ -50,6 +52,7 @@ create table note_events (
   id uuid primary key default gen_random_uuid(),
   title text not null,
   event_date date not null,
+  event_time time, -- null = 종일
   created_at timestamptz not null default now()
 );
 
@@ -67,3 +70,4 @@ alter table note_events enable row level security;
 alter table note_ideas enable row level security;
 
 create index if not exists note_events_date_idx on note_events (event_date);
+create index if not exists note_todos_due_date_idx on note_todos (due_date);

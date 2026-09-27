@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { LedgerCheck } from "@/components/ledger-check";
+import { EditButton, InlineEdit } from "@/components/inline-edit";
 
 type Product = {
   id: string;
@@ -12,6 +13,7 @@ type Product = {
 export default function ProductPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [name, setName] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   async function load() {
     const res = await fetch("/api/products");
@@ -41,6 +43,17 @@ export default function ProductPage() {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ done: !current }),
+    });
+    load();
+  }
+
+  async function rename(id: string, next: string) {
+    setEditingId(null);
+    setProducts((list) => list.map((p) => (p.id === id ? { ...p, name: next } : p)));
+    await fetch(`/api/products/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: next }),
     });
     load();
   }
@@ -95,18 +108,30 @@ export default function ProductPage() {
           <ul className="space-y-3">
             {products.map((p) => (
               <li key={p.id} className="flex items-center gap-2">
-                <LedgerCheck checked={p.done} onChange={() => toggle(p.id, p.done)} className="flex-1">
-                  {p.name}
-                </LedgerCheck>
-                <button
-                  onClick={() => remove(p.id)}
-                  aria-label="삭제"
-                  className="grid h-6 w-6 flex-none place-items-center rounded-full text-muted transition-colors hover:bg-accent-soft hover:text-accent"
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                    <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  </svg>
-                </button>
+                {editingId === p.id ? (
+                  <InlineEdit
+                    value={p.name}
+                    onSave={(next) => rename(p.id, next)}
+                    onCancel={() => setEditingId(null)}
+                    className="flex-1"
+                  />
+                ) : (
+                  <>
+                    <LedgerCheck checked={p.done} onChange={() => toggle(p.id, p.done)} className="flex-1">
+                      {p.name}
+                    </LedgerCheck>
+                    <EditButton onClick={() => setEditingId(p.id)} />
+                    <button
+                      onClick={() => remove(p.id)}
+                      aria-label="삭제"
+                      className="grid h-6 w-6 flex-none place-items-center rounded-full text-muted transition-colors hover:bg-accent-soft hover:text-accent"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                        <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                      </svg>
+                    </button>
+                  </>
+                )}
               </li>
             ))}
           </ul>
