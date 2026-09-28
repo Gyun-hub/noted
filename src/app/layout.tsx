@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { DevServiceWorkerCleanup } from "@/components/dev-sw-cleanup";
 import "./globals.css";
 
 // Pretendard: dynamic subset CSS라 화면에 쓰인 글자 조각만 내려받음
@@ -31,7 +32,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <link rel="preconnect" href="https://cdn.jsdelivr.net" crossOrigin="anonymous" />
         <link rel="stylesheet" href={PRETENDARD_CSS} crossOrigin="anonymous" />
       </head>
-      <body className="min-h-full">{children}</body>
+      <body className="min-h-full">
+        {children}
+        <DevServiceWorkerCleanup />
+      </body>
     </html>
   );
 }

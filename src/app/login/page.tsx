@@ -18,7 +18,7 @@ export default function LoginPage() {
       body: JSON.stringify({ pin }),
     }).catch(() => null);
     if (res?.ok) {
-      router.replace("/today");
+      router.replace("/home");
       router.refresh();
       return;
     }

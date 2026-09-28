@@ -1,11 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { Toaster } from "@/components/toaster";
-import { send } from "@/lib/api";
 
 const tabs = [
+  {
+    href: "/home",
+    label: "홈",
+    icon: <path d="M4 10.5L12 4l8 6.5V19a1 1 0 01-1 1h-4.5v-5.5h-5V20H5a1 1 0 01-1-1z" />,
+  },
   {
     href: "/today",
     label: "오늘",
@@ -35,29 +39,35 @@ const tabs = [
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const router = useRouter();
-
-  async function lock() {
-    if (!confirm("잠글까요? 다시 열려면 PIN이 필요합니다.")) return;
-    if (!(await send("/api/auth/logout", "POST"))) return;
-    router.replace("/login");
-    router.refresh();
-  }
 
   return (
     <div className="relative min-h-dvh">
-      <button
-        type="button"
-        onClick={lock}
-        aria-label="잠그기"
+      <Link
+        href="/settings"
+        aria-label="설정"
+        aria-current={pathname?.startsWith("/settings") ? "page" : undefined}
         className="icon-btn fixed z-30"
-        style={{ top: "calc(1.25rem + env(safe-area-inset-top))", right: "1rem" }}
+        style={{
+          top: "calc(1.25rem + env(safe-area-inset-top))",
+          right: "1rem",
+          color: pathname?.startsWith("/settings") ? "var(--navy)" : undefined,
+        }}
       >
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <rect x="5" y="10.5" width="14" height="10" rx="2" stroke="currentColor" strokeWidth="1.7" />
-          <path d="M8.5 10.5V8a3.5 3.5 0 017 0v2.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+        <svg
+          width="19"
+          height="19"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <circle cx="12" cy="12" r="3" />
+          <path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.6 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.6-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z" />
         </svg>
-      </button>
+      </Link>
 
       <main
         className="mx-auto max-w-md px-5"

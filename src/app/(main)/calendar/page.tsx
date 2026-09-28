@@ -186,6 +186,16 @@ export default function CalendarPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [year, month]);
 
+  // 홈 화면에서 /calendar?date=YYYY-MM-DD 로 들어오면 그 날을 선택
+  useEffect(() => {
+    const date = new URLSearchParams(window.location.search).get("date");
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+    const [y, m] = date.split("-").map(Number);
+    setCursor(new Date(y, m - 1, 1));
+    setSelected(date);
+    setSchedule(emptySchedule(date));
+  }, []);
+
   // 기간 일정은 이번 달 안의 모든 날짜에 펼침
   const eventsByDate = useMemo(() => {
     const map: Record<string, EventRow[]> = {};

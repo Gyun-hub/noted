@@ -14,7 +14,7 @@ export async function proxy(request: NextRequest) {
 
   if (authed && isLoginPath) {
     const url = request.nextUrl.clone();
-    url.pathname = "/today";
+    url.pathname = "/home";
     return NextResponse.redirect(url);
   }
 
@@ -23,6 +23,6 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js|icons|api/auth/login|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js|icons|api/auth/login|api/cron|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
