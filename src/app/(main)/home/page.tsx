@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { LedgerCheck } from "@/components/ledger-check";
 import { PageHeader, Section } from "@/components/page";
 import { runsOn } from "@/components/weekday-picker";
@@ -24,6 +24,26 @@ type Dashboard = {
 };
 
 const DAYS = ["일", "월", "화", "수", "목", "금", "토"];
+// 이만큼 옆으로 밀어야 주가 넘어감 (px)
+const SWIPE_MIN = 50;
+
+type WeekView = { start: string; events: EventRow[]; todos: Todo[] };
+
+async function loadWeek(start: string): Promise<WeekView> {
+  const end = addDays(start, 6);
+  const [eventsData, todosData] = await Promise.all([
+    getJson<{ events: EventRow[] }>(`/api/events?start=${start}&end=${end}`),
+    getJson<{ todos: Todo[] }>(`/api/todos?start=${start}&end=${end}`),
+  ]);
+  return { start, events: eventsData?.events ?? [], todos: todosData?.todos ?? [] };
+}
+
+function weekTitle(offset: number) {
+  if (offset === 0) return "이번 주";
+  if (offset === -1) return "지난주";
+  if (offset === 1) return "다음 주";
+  return offset < 0 ? `${-offset}주 전` : `${offset}주 뒤`;
+}
 // 이번 주 뒤로 며칠까지 "다가오는 일정"으로 보여줄지
 const UPCOMING_DAYS = 30;
 
@@ -107,12 +127,45 @@ export default function HomePage() {
   const weekEnd = addDays(weekStart, 6);
   const upcomingEnd = addDays(weekEnd, UPCOMING_DAYS);
 
+  // 주 목록: 좌우로 밀거나 화살표로 지난주/다음 주. 0 = 이번 주
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [slide, setSlide] = useState<"prev" | "next" | null>(null);
+  const [view, setView] = useState<WeekView | null>(null);
+  const touch = useRef<{ x: number; y: number } | null>(null);
+  const viewStart = addDays(weekStart, weekOffset * 7);
+  const viewEnd = addDays(viewStart, 6);
+
   useEffect(() => {
     loadDashboard(today, weekStart, weekEnd, upcomingEnd).then(setData);
   }, [today, weekStart, weekEnd, upcomingEnd]);
 
+  useEffect(() => {
+    loadWeek(viewStart).then(setView);
+  }, [viewStart]);
+
   function reload() {
     loadDashboard(today, weekStart, weekEnd, upcomingEnd).then(setData);
+    loadWeek(viewStart).then(setView);
+  }
+
+  function moveWeek(delta: number) {
+    setSlide(delta < 0 ? "prev" : "next");
+    setWeekOffset((o) => (delta === 0 ? 0 : o + delta));
+  }
+
+  function onTouchStart(e: React.TouchEvent) {
+    touch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  }
+
+  // 가로로 충분히, 세로보다 확실히 많이 밀었을 때만 (세로 스크롤과 구분)
+  function onTouchEnd(e: React.TouchEvent) {
+    const start = touch.current;
+    touch.current = null;
+    if (!start) return;
+    const dx = e.changedTouches[0].clientX - start.x;
+    const dy = e.changedTouches[0].clientY - start.y;
+    if (Math.abs(dx) < SWIPE_MIN || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    moveWeek(dx < 0 ? 1 : -1);
   }
 
   // 홈에서 바로 체크. 실패하면 다시 불러와 되돌림. 체크한 항목은 새로고침 전까지 목록에 남음
@@ -126,6 +179,7 @@ export default function HomePage() {
     const done = !todo.done;
     const flip = (list: Todo[]) => list.map((t) => (t.id === todo.id ? { ...t, done } : t));
     setData((d) => d && { ...d, oneOff: flip(d.oneOff), weekTodos: flip(d.weekTodos) });
+    setView((v) => v && { ...v, todos: flip(v.todos) });
     if (!(await send(`/api/todos/${todo.id}`, "PATCH", { done }))) reload();
   }
 
@@ -136,19 +190,24 @@ export default function HomePage() {
     if (!(await send(`/api/products/${product.id}`, "PATCH", { done }))) reload();
   }
 
-  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  // 다른 주를 불러오는 동안엔 보던 주를 흐리게 두고, 다 오면 바꿈
+  const viewReady = view?.start === viewStart;
+  const shownStart = view?.start ?? viewStart;
+  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(shownStart, i));
 
-  // 기간 일정은 이번 주 안 모든 날짜에 펼침
+  // 기간 일정은 보는 주 안 모든 날짜에 펼침
   const week = (() => {
     const events: Record<string, EventRow[]> = {};
     const todos: Record<string, Todo[]> = {};
-    for (const e of data?.events ?? []) {
-      const last = endDateOf(e) < weekEnd ? endDateOf(e) : weekEnd;
-      for (let d = e.event_date > weekStart ? e.event_date : weekStart; d <= last; d = addDays(d, 1)) {
+    if (!view) return { events, todos };
+    const end = addDays(view.start, 6);
+    for (const e of view.events) {
+      const last = endDateOf(e) < end ? endDateOf(e) : end;
+      for (let d = e.event_date > view.start ? e.event_date : view.start; d <= last; d = addDays(d, 1)) {
         (events[d] ??= []).push(e);
       }
     }
-    for (const t of data?.weekTodos ?? []) if (t.due_date) (todos[t.due_date] ??= []).push(t);
+    for (const t of view.todos) if (t.due_date) (todos[t.due_date] ??= []).push(t);
     return { events, todos };
   })();
 
@@ -231,11 +290,40 @@ export default function HomePage() {
       </div>
 
       <Section
-        title="이번 주"
+        title={weekTitle(weekOffset)}
         tone="navy"
-        aside={`${monthDay(weekStart)} – ${monthDay(weekEnd)}`}
+        aside={
+          <span className="flex items-center gap-1">
+            {weekOffset !== 0 && (
+              <button type="button" onClick={() => moveWeek(0)} className="text-btn mr-1">
+                이번 주로
+              </button>
+            )}
+            <button type="button" aria-label="지난주" onClick={() => moveWeek(-1)} className="icon-btn h-7 w-7">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+            <span className="tabular-nums">
+              {monthDay(viewStart)} – {monthDay(viewEnd)}
+            </span>
+            <button type="button" aria-label="다음 주" onClick={() => moveWeek(1)} className="icon-btn h-7 w-7">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          </span>
+        }
       >
-        <ol>
+        <ol
+          key={shownStart}
+          onTouchStart={onTouchStart}
+          onTouchEnd={onTouchEnd}
+          className="week-list"
+          data-slide={slide ?? undefined}
+          aria-busy={!viewReady}
+          style={{ opacity: viewReady ? 1 : 0.5, touchAction: "pan-y" }}
+        >
           {weekDays.map((day) => {
             const events = week.events[day] ?? [];
             const todos = week.todos[day] ?? [];

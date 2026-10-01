@@ -393,3 +393,29 @@ body {
 .composer-input:focus {
   outline: none;
 }
+
+/* ---------- 홈: 주 넘길 때 미끄러지듯 ---------- */
+
+.week-list[data-slide="next"] {
+  animation: week-in-right 0.22s ease-out;
+}
+.week-list[data-slide="prev"] {
+  animation: week-in-left 0.22s ease-out;
+}
+@keyframes week-in-right {
+  from {
+    transform: translateX(24px);
+    opacity: 0.4;
+  }
+}
+@keyframes week-in-left {
+  from {
+    transform: translateX(-24px);
+    opacity: 0.4;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .week-list[data-slide] {
+    animation: none;
+  }
+}
