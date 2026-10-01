@@ -29,13 +29,23 @@ const SWIPE_MIN = 50;
 
 type WeekView = { start: string; events: EventRow[]; todos: Todo[] };
 
-async function loadWeek(start: string): Promise<WeekView> {
+/**
+ * 주 목록 메모리 캐시. 홈을 나갔다 와도 남아 있어 바로 보임.
+ * 보여줄 땐 캐시를 먼저 쓰고 뒤에서 다시 받아 바뀐 게 있으면 고침 (stale-while-revalidate)
+ */
+const weekCache = new Map<string, WeekView>();
+
+/** 실패하면 null. 빈 목록을 캐시해 "일정 없음"으로 보이지 않게 */
+async function loadWeek(start: string): Promise<WeekView | null> {
   const end = addDays(start, 6);
   const [eventsData, todosData] = await Promise.all([
     getJson<{ events: EventRow[] }>(`/api/events?start=${start}&end=${end}`),
     getJson<{ todos: Todo[] }>(`/api/todos?start=${start}&end=${end}`),
   ]);
-  return { start, events: eventsData?.events ?? [], todos: todosData?.todos ?? [] };
+  if (!eventsData || !todosData) return null;
+  const view = { start, events: eventsData.events ?? [], todos: todosData.todos ?? [] };
+  weekCache.set(start, view);
+  return view;
 }
 
 function weekTitle(offset: number) {
@@ -130,7 +140,9 @@ export default function HomePage() {
   // 주 목록: 좌우로 밀거나 화살표로 지난주/다음 주. 0 = 이번 주
   const [weekOffset, setWeekOffset] = useState(0);
   const [slide, setSlide] = useState<"prev" | "next" | null>(null);
-  const [view, setView] = useState<WeekView | null>(null);
+  const [weeks, setWeeks] = useState<Record<string, WeekView>>(() => Object.fromEntries(weekCache));
+  // 넘기기 직전에 보던 주. 새 주가 캐시에 없을 때 받아올 동안 이걸 흐리게 보여줌
+  const [prevStart, setPrevStart] = useState<string | null>(null);
   const touch = useRef<{ x: number; y: number } | null>(null);
   const viewStart = addDays(weekStart, weekOffset * 7);
   const viewEnd = addDays(viewStart, 6);
@@ -139,16 +151,24 @@ export default function HomePage() {
     loadDashboard(today, weekStart, weekEnd, upcomingEnd).then(setData);
   }, [today, weekStart, weekEnd, upcomingEnd]);
 
+  // 보는 주는 항상 다시 받아 최신으로, 양옆 주는 캐시에 없을 때만 미리 받아 둠
   useEffect(() => {
-    loadWeek(viewStart).then(setView);
+    const store = (v: WeekView | null) => v && setWeeks((w) => ({ ...w, [v.start]: v }));
+    loadWeek(viewStart).then((v) => {
+      store(v);
+      for (const start of [addDays(viewStart, -7), addDays(viewStart, 7)]) {
+        if (!weekCache.has(start)) loadWeek(start).then(store);
+      }
+    });
   }, [viewStart]);
 
   function reload() {
     loadDashboard(today, weekStart, weekEnd, upcomingEnd).then(setData);
-    loadWeek(viewStart).then(setView);
+    loadWeek(viewStart).then((v) => v && setWeeks((w) => ({ ...w, [v.start]: v })));
   }
 
   function moveWeek(delta: number) {
+    setPrevStart(viewStart);
     setSlide(delta < 0 ? "prev" : "next");
     setWeekOffset((o) => (delta === 0 ? 0 : o + delta));
   }
@@ -179,7 +199,14 @@ export default function HomePage() {
     const done = !todo.done;
     const flip = (list: Todo[]) => list.map((t) => (t.id === todo.id ? { ...t, done } : t));
     setData((d) => d && { ...d, oneOff: flip(d.oneOff), weekTodos: flip(d.weekTodos) });
-    setView((v) => v && { ...v, todos: flip(v.todos) });
+    setWeeks((w) => {
+      const next: Record<string, WeekView> = {};
+      for (const [start, v] of Object.entries(w)) {
+        next[start] = { ...v, todos: flip(v.todos) };
+        weekCache.set(start, next[start]);
+      }
+      return next;
+    });
     if (!(await send(`/api/todos/${todo.id}`, "PATCH", { done }))) reload();
   }
 
@@ -190,7 +217,8 @@ export default function HomePage() {
     if (!(await send(`/api/products/${product.id}`, "PATCH", { done }))) reload();
   }
 
-  // 다른 주를 불러오는 동안엔 보던 주를 흐리게 두고, 다 오면 바꿈
+  // 캐시에 있으면 바로, 없으면 받아올 동안 보던 주를 흐리게 두고 다 오면 바꿈
+  const view = weeks[viewStart] ?? (prevStart ? weeks[prevStart] : undefined) ?? null;
   const viewReady = view?.start === viewStart;
   const shownStart = view?.start ?? viewStart;
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(shownStart, i));
