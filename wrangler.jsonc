@@ -4,6 +4,8 @@
   "main": "cloudflare-worker.js",
   "compatibility_date": "2026-08-27",
   "compatibility_flags": ["nodejs_compat"],
+  // 대시보드에서 넣은 런타임 변수를 배포 때 지우지 않음 (Secret은 원래 유지됨)
+  "keep_vars": true,
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
