@@ -43,6 +43,31 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   return (
     <div className="relative min-h-dvh">
       <Link
+        href="/search"
+        aria-label="검색"
+        aria-current={pathname?.startsWith("/search") ? "page" : undefined}
+        className="icon-btn fixed z-30"
+        style={{
+          top: "calc(1.25rem + env(safe-area-inset-top))",
+          right: "3.25rem",
+          color: pathname?.startsWith("/search") ? "var(--navy)" : undefined,
+        }}
+      >
+        <svg
+          width="19"
+          height="19"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          aria-hidden="true"
+        >
+          <circle cx="11" cy="11" r="6.5" />
+          <path d="M16 16l4 4" />
+        </svg>
+      </Link>
+      <Link
         href="/settings"
         aria-label="설정"
         aria-current={pathname?.startsWith("/settings") ? "page" : undefined}

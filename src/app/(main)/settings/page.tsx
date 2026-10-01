@@ -13,7 +13,7 @@ const OFFSET_OPTIONS = [
   { value: 0, label: "당일" },
 ];
 
-type Settings = { notifyTime: string; notifyOffsets: number[] };
+type Settings = { notifyTime: string; notifyOffsets: number[]; notifyTodos: boolean };
 
 /** 이 기기의 알림 상태 */
 type DeviceState =
@@ -39,6 +39,36 @@ const DEVICE_TEXT: Record<Exclude<DeviceState, "checking" | "on" | "off">, strin
   "no-worker": "개발 모드에서는 서비스워커가 꺼져 있어 알림을 켤 수 없어요. 배포된 앱에서 켜주세요.",
   denied: "알림 권한이 차단돼 있어요. 브라우저나 휴대폰 설정에서 이 사이트의 알림을 허용해주세요.",
 };
+
+function Switch({
+  label,
+  checked,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  disabled?: boolean;
+  onChange: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={onChange}
+      className="relative h-7 w-12 flex-none rounded-full transition-colors disabled:opacity-60"
+      style={{ background: checked ? "var(--navy)" : "var(--rule)" }}
+    >
+      <span
+        className="absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-[left]"
+        style={{ left: checked ? "1.375rem" : "0.125rem" }}
+      />
+    </button>
+  );
+}
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -147,7 +177,7 @@ export default function SettingsPage() {
     <>
       <PageHeader title="설정" />
 
-      <Section title="일정 알림" tone="navy">
+      <Section title="알림" tone="navy">
         <div className="row justify-between">
           <div>
             <p className="font-medium">이 기기에서 받기</p>
@@ -156,21 +186,12 @@ export default function SettingsPage() {
             </p>
           </div>
           {(device === "on" || device === "off") && (
-            <button
-              type="button"
-              role="switch"
-              aria-checked={device === "on"}
-              aria-label="이 기기에서 알림 받기"
+            <Switch
+              label="이 기기에서 알림 받기"
+              checked={device === "on"}
               disabled={busy}
-              onClick={device === "on" ? turnOff : turnOn}
-              className="relative h-7 w-12 flex-none rounded-full transition-colors disabled:opacity-60"
-              style={{ background: device === "on" ? "var(--navy)" : "var(--rule)" }}
-            >
-              <span
-                className="absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-[left]"
-                style={{ left: device === "on" ? "1.375rem" : "0.125rem" }}
-              />
-            </button>
+              onChange={device === "on" ? turnOff : turnOn}
+            />
           )}
         </div>
         {device !== "on" && device !== "off" && device !== "checking" && (
@@ -208,6 +229,19 @@ export default function SettingsPage() {
               </button>
             ))}
           </div>
+        </div>
+
+        <div className="row justify-between">
+          <div>
+            <p className="font-medium">할 일 알림</p>
+            <p className="text-[13px] text-pencil">마감일 당일 알림 시각에 안 끝난 할 일을 알려줘요</p>
+          </div>
+          <Switch
+            label="할 일 알림"
+            checked={settings?.notifyTodos ?? false}
+            disabled={!settings}
+            onChange={() => settings && save({ notifyTodos: !settings.notifyTodos })}
+          />
         </div>
 
         <div className="pt-4">

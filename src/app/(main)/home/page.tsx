@@ -7,7 +7,7 @@ import { PageHeader, Section } from "@/components/page";
 import { runsOn } from "@/components/weekday-picker";
 import { addDays } from "@/components/recurring-history";
 import { getJson, send } from "@/lib/api";
-import { endDateOf, monthDay, rangeLabel, timeLabelOn, type EventRow } from "@/lib/events";
+import { REPEAT_LABEL, endDateOf, eventKey, monthDay, rangeLabel, timeLabelOn, type EventRow } from "@/lib/events";
 
 type Todo = { id: string; title: string; done: boolean; due_date: string | null };
 type RecurringTodo = { id: string; title: string; done: boolean; weekdays: number[] | null };
@@ -153,7 +153,11 @@ export default function HomePage() {
   })();
 
   const weekEventCount = (data?.events ?? []).filter((e) => e.event_date <= weekEnd && endDateOf(e) >= weekStart).length;
-  const upcoming = (data?.events ?? []).filter((e) => e.event_date > weekEnd).slice(0, 4);
+  // 반복 일정은 다음 회차 하나만
+  const upcoming = (data?.events ?? [])
+    .filter((e) => e.event_date > weekEnd)
+    .filter((e, i, list) => list.findIndex((o) => o.id === e.id) === i)
+    .slice(0, 4);
 
   const todayWeekday = now.getDay();
   const todayRecurring = (data?.recurring ?? []).filter((t) => runsOn(t.weekdays, todayWeekday));
@@ -264,7 +268,7 @@ export default function HomePage() {
                     )}
                     <ul className="space-y-1">
                       {events.map((e) => (
-                        <li key={e.id} className="flex items-baseline gap-2 text-[15px]">
+                        <li key={eventKey(e)} className="flex items-baseline gap-2 text-[15px]">
                           <span className="w-[5.5rem] flex-none text-[12px] tabular-nums text-blue">
                             {timeLabelOn(e, day)}
                           </span>
@@ -347,12 +351,16 @@ export default function HomePage() {
         <Section title="다가오는 일정" tone="blue">
           <ul>
             {upcoming.map((e) => (
-              <li key={e.id}>
+              <li key={eventKey(e)}>
                 <Link href={`/calendar?date=${e.event_date}`} className="row">
                   <span className="w-16 flex-none text-[13px] text-blue">{monthDay(e.event_date)}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium">{e.title}</span>
-                    {rangeLabel(e) && <span className="block text-[12px] text-pencil">{rangeLabel(e)}</span>}
+                    {(rangeLabel(e) || e.repeat) && (
+                      <span className="block text-[12px] text-pencil">
+                        {[e.repeat && `${REPEAT_LABEL[e.repeat]} 반복`, rangeLabel(e)].filter(Boolean).join(" · ")}
+                      </span>
+                    )}
                   </span>
                   <span className="flex-none text-[12px] text-pencil">
                     D-{Math.round((Date.parse(e.event_date) - Date.parse(today)) / 86400000)}

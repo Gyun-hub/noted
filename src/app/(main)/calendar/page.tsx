@@ -7,7 +7,7 @@ import { AddIcon, PageHeader } from "@/components/page";
 import { ScheduleFields, emptySchedule, scheduleToBody, type Schedule } from "@/components/schedule-fields";
 import { runsOn } from "@/components/weekday-picker";
 import { getJson, send } from "@/lib/api";
-import { endDateOf, isMultiDay, rangeLabel, shortTime, timeLabelOn, type EventRow } from "@/lib/events";
+import { REPEAT_LABEL, endDateOf, eventKey, isMultiDay, rangeLabel, shortTime, timeLabelOn, type EventRow } from "@/lib/events";
 import { showToast } from "@/lib/toast";
 
 type Todo = {
@@ -61,12 +61,16 @@ function groupByDate<T>(items: T[], key: (item: T) => string) {
   return map;
 }
 
+// 반복 일정 회차를 눌러도 수정은 첫 회 날짜 기준 (전체가 바뀜)
 function eventToSchedule(e: EventRow): Schedule {
+  const origin = e.series ?? e;
   return {
-    startDate: e.event_date,
+    startDate: origin.event_date,
     startTime: shortTime(e.event_time),
-    endDate: endDateOf(e),
+    endDate: endDateOf(origin),
     endTime: shortTime(e.end_time),
+    repeat: e.repeat ?? "",
+    repeatUntil: e.repeat_until ?? "",
   };
 }
 
@@ -93,6 +97,7 @@ function EventEditor({
     <form onSubmit={submit} onKeyDown={(e) => e.key === "Escape" && onCancel()} className="w-full space-y-3 py-2">
       <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} aria-label="일정 이름" className="field" />
       <ScheduleFields value={schedule} onChange={setSchedule} />
+      {event.repeat && <p className="text-[12px] text-pencil">반복 일정은 모든 회차가 함께 바뀌어요</p>}
       <div className="flex justify-end">
         <EditActions onCancel={onCancel} />
       </div>
@@ -256,7 +261,10 @@ export default function CalendarPage() {
   }
 
   async function removeEvent(event: EventRow) {
-    if (!confirm(`일정 "${event.title}"을 지울까요?`)) return;
+    const message = event.repeat
+      ? `반복 일정 "${event.title}"을 지울까요? 모든 회차가 지워져요.`
+      : `일정 "${event.title}"을 지울까요?`;
+    if (!confirm(message)) return;
     setEvents((list) => list.filter((e) => e.id !== event.id));
     if (!(await send(`/api/events/${event.id}`, "DELETE"))) load();
   }
@@ -437,7 +445,7 @@ export default function CalendarPage() {
           <GroupTitle color="var(--navy)">일정</GroupTitle>
           <ul>
             {selectedEvents.map((e) => (
-              <li key={e.id} className="row">
+              <li key={eventKey(e)} className="row">
                 {editingId === e.id ? (
                   <EventEditor
                     event={e}
@@ -451,6 +459,11 @@ export default function CalendarPage() {
                     </span>
                     <span className="min-w-0 flex-1">
                       {e.title}
+                      {e.repeat && (
+                        <span className="ml-1.5 rounded-full bg-navy-soft px-1.5 py-0.5 align-middle text-[11px] text-navy">
+                          {REPEAT_LABEL[e.repeat]}
+                        </span>
+                      )}
                       {isMultiDay(e) && <span className="block text-[12px] text-pencil">{rangeLabel(e)}</span>}
                     </span>
                     <EditButton onClick={() => setEditingId(e.id)} />

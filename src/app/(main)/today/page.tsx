@@ -8,7 +8,7 @@ import { WeekdayPicker, runsOn, weekdaysLabel } from "@/components/weekday-picke
 import { RecurringHistory, STREAK_WINDOW, addDays } from "@/components/recurring-history";
 import { AddIcon, PageHeader, Section } from "@/components/page";
 import { getJson, send } from "@/lib/api";
-import { isMultiDay, rangeLabel, timeLabelOn, type EventRow } from "@/lib/events";
+import { eventKey, isMultiDay, rangeLabel, timeLabelOn, type EventRow } from "@/lib/events";
 import { dismissToast, showToast } from "@/lib/toast";
 
 type Todo = {
@@ -220,7 +220,7 @@ export default function TodayPage() {
         >
           <ul>
             {events.map((e) => (
-              <li key={e.id} className="row">
+              <li key={eventKey(e)} className="row">
                 <span className="w-[4.5rem] flex-none text-[13px] font-semibold leading-tight text-navy">
                   {timeLabelOn(e, date)}
                 </span>

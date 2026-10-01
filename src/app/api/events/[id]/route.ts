@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { parseSchedule } from "@/lib/events";
+import { parseSchedule, type Repeat } from "@/lib/events";
 
-// 제목만, 또는 일정(eventDate 필수 + eventTime/endDate/endTime) 전체를 한 번에 수정
+// 제목만, 또는 일정(eventDate 필수 + eventTime/endDate/endTime/repeat/repeatUntil) 전체를 한 번에 수정.
+// 반복 일정은 회차가 아니라 전체가 바뀜
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const body = await request.json().catch(() => null);
@@ -13,6 +14,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     event_time?: string | null;
     end_date?: string | null;
     end_time?: string | null;
+    repeat?: Repeat | null;
+    repeat_until?: string | null;
   } = {};
   if (typeof body?.title === "string") {
     const title = body.title.trim();

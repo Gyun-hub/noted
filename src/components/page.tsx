@@ -1,7 +1,7 @@
 /** 페이지 머리: 손글씨 제목 + 한 줄 요약 */
 export function PageHeader({ title, sub, children }: { title: React.ReactNode; sub?: React.ReactNode; children?: React.ReactNode }) {
   return (
-    <header className="relative mb-8 pr-12">
+    <header className="relative mb-8 pr-20">
       <h1 className="page-title">{title}</h1>
       {sub && <p className="mt-2 text-sm text-pencil">{sub}</p>}
       {children}
