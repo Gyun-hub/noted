@@ -1,18 +1,21 @@
-// 이 기기 브라우저(localStorage)에 저장하는 캐시 키 모음.
-// 새 캐시를 만들면 여기에 키를 추가. 잠그기(로그아웃) 때 여기 있는 키는 전부 지움.
+// 이 기기 브라우저(localStorage)에 저장하는 화면 캐시 키 모음.
+// 새 캐시를 만들면 여기에 키를 추가. 잠그기(로그아웃) 때 여기 있는 키는 전부 지움 (lib/local-cache.ts)
 
 const PREFIX = "noted:";
 
 export const CACHE_KEYS = {
-  /** 홈 화면 마지막 데이터 (lib/home-cache.ts) */
+  /** 홈 요약 카드·목록 (scope: 날짜) */
   home: `${PREFIX}home`,
+  /** 홈 이번 주 목록 (scope: 날짜) */
+  homeWeek: `${PREFIX}home-week`,
+  /** 오늘 화면 (scope: 날짜) */
+  today: `${PREFIX}today`,
+  /** 달력 마지막으로 본 달 (scope: YYYY-MM) */
+  calendar: `${PREFIX}calendar`,
+  /** 장보기 목록 */
+  products: `${PREFIX}products`,
+  /** 아이디어 목록 */
+  ideas: `${PREFIX}ideas`,
 } as const;
 
-/** 잠그기 때 호출. 다른 사람이 같은 기기를 열어도 이전 데이터가 안 보이게 */
-export function clearLocalCaches() {
-  for (const key of Object.values(CACHE_KEYS)) {
-    try {
-      localStorage.removeItem(key);
-    } catch {}
-  }
-}
+export type CacheKey = (typeof CACHE_KEYS)[keyof typeof CACHE_KEYS];

@@ -5,6 +5,9 @@ import { LedgerCheck } from "@/components/ledger-check";
 import { DeleteButton, EditActions, EditButton } from "@/components/inline-edit";
 import { AddIcon, PageHeader, Section } from "@/components/page";
 import { getJson, send } from "@/lib/api";
+import { ListSkeleton } from "@/components/skeleton";
+import { CACHE_KEYS } from "@/lib/cache-keys";
+import { useLocalCache } from "@/lib/local-cache";
 
 type Product = {
   id: string;
@@ -60,9 +63,19 @@ export default function ProductPage() {
   const [store, setStore] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  // 처음엔 이 기기에 저장해 둔 목록을 먼저 보여주고, 받아오면 최신으로
+  const [loaded, setLoaded] = useState(false);
+  const cache = useLocalCache<Product[]>(CACHE_KEYS.products, "", loaded ? products : null, (cached) => {
+    setProducts(cached);
+    setLoaded(true);
+  });
+
   async function load() {
     const data = await getJson<{ products: Product[] }>("/api/products");
-    if (data) setProducts(data.products ?? []);
+    if (!data) return;
+    cache.markFresh();
+    setProducts(data.products ?? []);
+    setLoaded(true);
   }
 
   useEffect(() => {
@@ -225,7 +238,7 @@ export default function ProductPage() {
             </div>
           ))
         ) : (
-          <p className="empty">목록이 비어 있어요.</p>
+          loaded ? <p className="empty">목록이 비어 있어요.</p> : <ListSkeleton />
         )}
       </Section>
     </>

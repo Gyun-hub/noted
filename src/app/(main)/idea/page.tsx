@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { getJson, send } from "@/lib/api";
+import { ListSkeleton } from "@/components/skeleton";
+import { CACHE_KEYS } from "@/lib/cache-keys";
+import { useLocalCache } from "@/lib/local-cache";
 import { showToast } from "@/lib/toast";
 import { DeleteButton, EditActions, EditButton, InlineEdit } from "@/components/inline-edit";
 import { PageHeader, Section } from "@/components/page";
@@ -37,9 +40,19 @@ export default function IdeaPage() {
   const [convertingId, setConvertingId] = useState<string | null>(null);
   const [convertDate, setConvertDate] = useState("");
 
+  // 처음엔 이 기기에 저장해 둔 목록을 먼저 보여주고, 받아오면 최신으로
+  const [loaded, setLoaded] = useState(false);
+  const cache = useLocalCache<Idea[]>(CACHE_KEYS.ideas, "", loaded ? ideas : null, (cached) => {
+    setIdeas(cached);
+    setLoaded(true);
+  });
+
   async function load() {
     const data = await getJson<{ ideas: Idea[] }>("/api/ideas");
-    if (data) setIdeas(data.ideas ?? []);
+    if (!data) return;
+    cache.markFresh();
+    setIdeas(data.ideas ?? []);
+    setLoaded(true);
   }
 
   useEffect(() => {
@@ -85,7 +98,7 @@ export default function IdeaPage() {
 
   return (
     <>
-      <PageHeader title="아이디어" sub={ideas.length > 0 ? `${ideas.length}개 적어둠` : "떠오른 걸 바로 적어두세요"} />
+      <PageHeader title="아이디어" sub={!loaded ? "\u00a0" : ideas.length > 0 ? `${ideas.length}개 적어둠` : "떠오른 걸 바로 적어두세요"} />
 
       <form onSubmit={addIdea} className="composer">
         <label htmlFor="new-idea" className="composer-label">
@@ -168,7 +181,7 @@ export default function IdeaPage() {
             })}
           </ul>
         ) : (
-          <p className="empty">아직 적어둔 아이디어가 없어요.</p>
+          loaded ? <p className="empty">아직 적어둔 아이디어가 없어요.</p> : <ListSkeleton rows={3} />
         )}
       </Section>
     </>

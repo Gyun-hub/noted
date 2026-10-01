@@ -7,7 +7,8 @@ import { PageHeader, Section } from "@/components/page";
 import { runsOn } from "@/components/weekday-picker";
 import { addDays } from "@/components/recurring-history";
 import { getJson, send } from "@/lib/api";
-import { readHomeCache, writeHomeCache } from "@/lib/home-cache";
+import { CACHE_KEYS } from "@/lib/cache-keys";
+import { readCache, writeCache } from "@/lib/local-cache";
 import { REPEAT_LABEL, endDateOf, eventKey, monthDay, rangeLabel, timeLabelOn, type EventRow } from "@/lib/events";
 
 type Todo = { id: string; title: string; done: boolean; due_date: string | null };
@@ -182,20 +183,21 @@ export default function HomePage() {
   useEffect(() => {
     // 마지막으로 본 홈(오늘 것)을 먼저 보여주고, 최신을 받아 덮어씀. 늦게 온 캐시가 최신을 덮지 않게
     Promise.resolve().then(() => {
-      const cached = readHomeCache<Dashboard, WeekView>(today);
-      if (cached?.data) setData((d) => d ?? cached.data!);
-      if (cached?.week) setWeeks((w) => (w[cached.week!.start] ? w : { ...w, [cached.week!.start]: cached.week! }));
+      const cachedData = readCache<Dashboard>(CACHE_KEYS.home, today);
+      const cachedWeek = readCache<WeekView>(CACHE_KEYS.homeWeek, today);
+      if (cachedData) setData((d) => d ?? cachedData);
+      if (cachedWeek) setWeeks((w) => (w[cachedWeek.start] ? w : { ...w, [cachedWeek.start]: cachedWeek }));
     });
     loadDashboard(today, weekStart, weekEnd, upcomingEnd).then((d) => d && setData(d));
   }, [today, weekStart, weekEnd, upcomingEnd]);
 
   // 받은 데이터를 다음에 열 때 바로 보이게 저장
   useEffect(() => {
-    if (data) writeHomeCache(today, { data });
+    if (data) writeCache(CACHE_KEYS.home, data, today);
   }, [data, today]);
   const thisWeek = weeks[weekStart];
   useEffect(() => {
-    if (thisWeek) writeHomeCache(today, { week: thisWeek });
+    if (thisWeek) writeCache(CACHE_KEYS.homeWeek, thisWeek, today);
   }, [thisWeek, today]);
 
   // 보는 주는 항상 다시 받아 최신으로, 양옆 주는 캐시에 없을 때만 미리 받아 둠

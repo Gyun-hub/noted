@@ -8,6 +8,9 @@ import { WeekdayPicker, runsOn, weekdaysLabel } from "@/components/weekday-picke
 import { RecurringHistory, STREAK_WINDOW, addDays } from "@/components/recurring-history";
 import { AddIcon, PageHeader, Section } from "@/components/page";
 import { getJson, send } from "@/lib/api";
+import { ListSkeleton } from "@/components/skeleton";
+import { CACHE_KEYS } from "@/lib/cache-keys";
+import { useLocalCache } from "@/lib/local-cache";
 import { eventKey, isMultiDay, rangeLabel, timeLabelOn, type EventRow } from "@/lib/events";
 import { dismissToast, showToast } from "@/lib/toast";
 
@@ -25,6 +28,7 @@ type RecurringTodo = Todo & {
 
 type TodosResponse = { recurring: RecurringTodo[]; oneOff: Todo[] };
 type EventsResponse = { events: EventRow[] };
+type TodayCache = { recurring: RecurringTodo[]; oneOff: Todo[]; events: EventRow[] };
 type HistoryResponse = { logs: { todo_id: string; log_date: string; done: boolean }[] };
 
 const UNDO_MS = 4000;
@@ -87,16 +91,31 @@ export default function TodayPage() {
   const date = toDateStr(new Date());
   const weekday = new Date().getDay();
 
+  // 처음엔 이 기기에 저장해 둔 오늘 목록을 먼저 보여주고, 받아오면 최신으로 (날짜가 바뀌면 안 씀)
+  const [loaded, setLoaded] = useState(false);
+  const cache = useLocalCache<TodayCache>(
+    CACHE_KEYS.today,
+    date,
+    loaded ? { recurring, oneOff, events } : null,
+    (cached) => {
+      setRecurring(cached.recurring);
+      setOneOff(cached.oneOff);
+      setEvents(cached.events);
+      setLoaded(true);
+    },
+  );
+
   async function load() {
     const [todosData, eventsData] = await Promise.all([
       getJson<TodosResponse>(`/api/todos?date=${date}`),
       getJson<EventsResponse>(`/api/events?start=${date}&end=${date}`),
     ]);
-    if (todosData) {
-      setRecurring(todosData.recurring ?? []);
-      setOneOff(todosData.oneOff ?? []);
-    }
-    if (eventsData) setEvents(eventsData.events ?? []);
+    if (!todosData || !eventsData) return;
+    cache.markFresh();
+    setRecurring(todosData.recurring ?? []);
+    setOneOff(todosData.oneOff ?? []);
+    setEvents(eventsData.events ?? []);
+    setLoaded(true);
   }
 
   async function loadHistory() {
@@ -197,7 +216,7 @@ export default function TodayPage() {
 
   return (
     <>
-      <PageHeader title={todayLabel()} sub={leftCount > 0 ? `남은 일 ${leftCount}개` : "오늘 할 일을 모두 끝냈어요"}>
+      <PageHeader title={todayLabel()} sub={!loaded ? "\u00a0" : leftCount > 0 ? `남은 일 ${leftCount}개` : "오늘 할 일을 모두 끝냈어요"}>
         {allRecurringDone && (
           <div className="pointer-events-none absolute right-5 top-24" role="img" aria-label="오늘 반복 완료">
             <span className="stamp">
@@ -312,7 +331,7 @@ export default function TodayPage() {
             ))}
           </ul>
         ) : (
-          <p className="empty">남은 할 일이 없어요. 위 입력칸에 새로 적어보세요.</p>
+          loaded ? <p className="empty">남은 할 일이 없어요. 위 입력칸에 새로 적어보세요.</p> : <ListSkeleton />
         )}
       </Section>
 

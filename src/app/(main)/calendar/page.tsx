@@ -7,6 +7,9 @@ import { AddIcon, PageHeader } from "@/components/page";
 import { ScheduleFields, emptySchedule, scheduleToBody, type Schedule } from "@/components/schedule-fields";
 import { runsOn } from "@/components/weekday-picker";
 import { getJson, send } from "@/lib/api";
+import { ListSkeleton } from "@/components/skeleton";
+import { CACHE_KEYS } from "@/lib/cache-keys";
+import { useLocalCache } from "@/lib/local-cache";
 import { REPEAT_LABEL, endDateOf, eventKey, isMultiDay, rangeLabel, shortTime, timeLabelOn, type EventRow } from "@/lib/events";
 import { showToast } from "@/lib/toast";
 
@@ -31,6 +34,8 @@ type RecurringLog = {
 };
 
 type Kind = "event" | "todo";
+
+type MonthCache = { events: EventRow[]; todos: Todo[]; recurring: RecurringTodo[]; logs: RecurringLog[] };
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -172,18 +177,37 @@ export default function CalendarPage() {
   const monthStart = toDateStr(new Date(year, month, 1));
   const monthEnd = toDateStr(new Date(year, month + 1, 0));
 
+  // 마지막으로 본 달은 이 기기에 저장해 두고 먼저 보여줌. loadedMonth = 지금 화면 데이터가 어느 달 것인지
+  const monthKey = monthStart.slice(0, 7);
+  const [loadedMonth, setLoadedMonth] = useState<string | null>(null);
+  const monthReady = loadedMonth === monthKey;
+  const cache = useLocalCache<MonthCache>(
+    CACHE_KEYS.calendar,
+    monthKey,
+    monthReady ? { events, todos, recurring, logs } : null,
+    (cached) => {
+      setEvents(cached.events);
+      setTodos(cached.todos);
+      setRecurring(cached.recurring);
+      setLogs(cached.logs);
+      setLoadedMonth(monthKey);
+    },
+  );
+
   async function load() {
+    const key = monthKey;
     const range = `start=${monthStart}&end=${monthEnd}`;
     const [eventsData, todosData] = await Promise.all([
       getJson<{ events: EventRow[] }>(`/api/events?${range}`),
       getJson<{ todos: Todo[]; recurring: RecurringTodo[]; logs: RecurringLog[] }>(`/api/todos?${range}`),
     ]);
-    if (eventsData) setEvents(eventsData.events ?? []);
-    if (todosData) {
-      setTodos(todosData.todos ?? []);
-      setRecurring(todosData.recurring ?? []);
-      setLogs(todosData.logs ?? []);
-    }
+    if (!eventsData || !todosData) return;
+    cache.markFresh();
+    setEvents(eventsData.events ?? []);
+    setTodos(todosData.todos ?? []);
+    setRecurring(todosData.recurring ?? []);
+    setLogs(todosData.logs ?? []);
+    setLoadedMonth(key);
   }
 
   useEffect(() => {
@@ -438,7 +462,7 @@ export default function CalendarPage() {
         {kind === "event" && <ScheduleFields value={schedule} onChange={setSchedule} />}
       </form>
 
-      {isEmpty && <p className="empty">이날은 비어 있어요.</p>}
+      {!monthReady ? <ListSkeleton rows={2} /> : isEmpty && <p className="empty">이날은 비어 있어요.</p>}
 
       {selectedEvents.length > 0 && (
         <>
