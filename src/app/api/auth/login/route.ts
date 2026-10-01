@@ -17,7 +17,9 @@ export async function POST(request: Request) {
   let until: number | null;
   try {
     until = await lockedUntil([ip, GLOBAL_KEY]);
-  } catch {
+  } catch (error) {
+    // 원인 확인용. Supabase 에러 문구만 남김 (키 값은 들어가지 않음)
+    console.error("login guard unavailable:", error instanceof Error ? error.message : error);
     return NextResponse.json({ error: "unavailable" }, { status: 503 });
   }
   if (until) {
