@@ -6,6 +6,8 @@
   "compatibility_flags": ["nodejs_compat"],
   // 대시보드에서 넣은 런타임 변수를 배포 때 지우지 않음 (Secret은 원래 유지됨)
   "keep_vars": true,
+  // Worker를 Supabase 가까운 곳에서 실행 (DB 왕복이 많은 앱이라 사용자 가까운 곳보다 빠름)
+  "placement": { "mode": "smart" },
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"

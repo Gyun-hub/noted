@@ -419,3 +419,21 @@ body {
     animation: none;
   }
 }
+
+/* ---------- 불러오는 중 자리 ---------- */
+
+.skeleton {
+  border-radius: 6px;
+  background: var(--grid);
+  animation: skeleton-pulse 1.2s ease-in-out infinite;
+}
+@keyframes skeleton-pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}

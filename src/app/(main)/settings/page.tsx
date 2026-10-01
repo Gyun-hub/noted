@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { PageHeader, Section } from "@/components/page";
 import { getJson, send } from "@/lib/api";
+import { clearLocalCaches } from "@/lib/cache-keys";
+import { clearHomeMemory } from "@/lib/home-cache";
 import { showToast } from "@/lib/toast";
 
 const OFFSET_OPTIONS = [
@@ -169,6 +171,8 @@ export default function SettingsPage() {
   async function lock() {
     if (!confirm("잠글까요? 다시 열려면 PIN이 필요합니다.")) return;
     if (!(await send("/api/auth/logout", "POST"))) return;
+    clearLocalCaches();
+    clearHomeMemory();
     router.replace("/login");
     router.refresh();
   }
