@@ -36,7 +36,7 @@ self.addEventListener("push", (event) => {
       body: data.body,
       tag: data.tag,
       icon: "/icons/icon-192.png",
-      badge: "/icons/icon-192.png",
+      badge: "/icons/badge-96.png",
       data: { url: data.url ?? "/today" },
     }),
   );
