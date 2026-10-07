@@ -16,6 +16,8 @@ export const CACHE_KEYS = {
   products: `${PREFIX}products`,
   /** 아이디어 목록 */
   ideas: `${PREFIX}ideas`,
+  /** 옷 기록 목록 */
+  clothes: `${PREFIX}clothes`,
 } as const;
 
 export type CacheKey = (typeof CACHE_KEYS)[keyof typeof CACHE_KEYS];

@@ -13,6 +13,7 @@ type Results = {
   events: EventRow[];
   products: { id: string; name: string; done: boolean; store: string | null }[];
   ideas: { id: string; content: string; created_at: string }[];
+  clothes: { id: string; category: string; brand: string; size_label: string; fit_notes: string }[];
 };
 
 const DEBOUNCE_MS = 250;
@@ -72,7 +73,7 @@ export default function SearchPage() {
   // 입력이 바뀌면 이전 결과는 숨김 (새 결과 올 때까지)
   const results = found && found.query === q ? found.results : null;
   const total = results
-    ? results.todos.length + results.recurring.length + results.events.length + results.products.length + results.ideas.length
+    ? results.todos.length + results.recurring.length + results.events.length + results.products.length + results.ideas.length + results.clothes.length
     : 0;
 
   return (
@@ -81,7 +82,7 @@ export default function SearchPage() {
 
       <div className="composer mb-8">
         <label htmlFor="search" className="composer-label">
-          할 일 · 일정 · 장보기 · 아이디어
+          할 일 · 일정 · 장보기 · 아이디어 · 옷
         </label>
         <input
           id="search"
@@ -166,6 +167,22 @@ export default function SearchPage() {
                 title={ideaLine(idea.content, q)}
                 query={q}
                 meta={new Intl.DateTimeFormat("ko-KR", { month: "long", day: "numeric" }).format(new Date(idea.created_at))}
+              />
+            ))}
+          </ul>
+        </Section>
+      )}
+
+      {results && results.clothes.length > 0 && (
+        <Section title="옷" aside={`${results.clothes.length}개`}>
+          <ul>
+            {results.clothes.map((c) => (
+              <Row
+                key={c.id}
+                href="/closet"
+                title={c.brand.toLowerCase().includes(q.toLowerCase()) ? c.brand : `${c.brand} · ${c.fit_notes}`}
+                query={q}
+                meta={[c.category, c.size_label].filter(Boolean).join(" ")}
               />
             ))}
           </ul>

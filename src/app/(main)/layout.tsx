@@ -31,6 +31,11 @@ const tabs = [
     icon: <path d="M4 5h2l2 10h10l2-7H7.2M10 19.5h.01M17 19.5h.01" />,
   },
   {
+    href: "/closet",
+    label: "옷",
+    icon: <path d="M9 4L4 6.5l1.5 4 2.5-1V20h8V9.5l2.5 1 1.5-4L15 4c0 1.7-1.3 3-3 3S9 5.7 9 4z" />,
+  },
+  {
     href: "/idea",
     label: "아이디어",
     icon: <path d="M9 18h6M10 21h4M12 3a6 6 0 00-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0012 3z" />,
