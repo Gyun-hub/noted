@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { PageHeader, Section } from "@/components/page";
 import { weekdaysLabel } from "@/components/weekday-picker";
 import { getJson } from "@/lib/api";
+import { TOOL_STATUS_LABEL, type ToolStatus } from "@/lib/tools";
 import { REPEAT_LABEL, monthDay, rangeLabel, shortTime, type EventRow } from "@/lib/events";
 
 type Results = {
@@ -14,6 +15,7 @@ type Results = {
   products: { id: string; name: string; done: boolean; store: string | null }[];
   ideas: { id: string; content: string; created_at: string }[];
   clothes: { id: string; category: string; brand: string; size_label: string; fit_notes: string }[];
+  tools: { id: string; name: string; kind: string; note: string; status: ToolStatus }[];
 };
 
 const DEBOUNCE_MS = 250;
@@ -73,7 +75,7 @@ export default function SearchPage() {
   // 입력이 바뀌면 이전 결과는 숨김 (새 결과 올 때까지)
   const results = found && found.query === q ? found.results : null;
   const total = results
-    ? results.todos.length + results.recurring.length + results.events.length + results.products.length + results.ideas.length + results.clothes.length
+    ? results.todos.length + results.recurring.length + results.events.length + results.products.length + results.ideas.length + results.clothes.length + results.tools.length
     : 0;
 
   return (
@@ -82,7 +84,7 @@ export default function SearchPage() {
 
       <div className="composer mb-8">
         <label htmlFor="search" className="composer-label">
-          할 일 · 일정 · 장보기 · 아이디어 · 옷
+          할 일 · 일정 · 장보기 · 아이디어 · 옷 · 도구
         </label>
         <input
           id="search"
@@ -167,6 +169,23 @@ export default function SearchPage() {
                 title={ideaLine(idea.content, q)}
                 query={q}
                 meta={new Intl.DateTimeFormat("ko-KR", { month: "long", day: "numeric" }).format(new Date(idea.created_at))}
+              />
+            ))}
+          </ul>
+        </Section>
+      )}
+
+      {results && results.tools.length > 0 && (
+        <Section title="써볼 도구" aside={`${results.tools.length}개`}>
+          <ul>
+            {results.tools.map((t) => (
+              <Row
+                key={t.id}
+                href="/idea?view=tools"
+                title={t.name.toLowerCase().includes(q.toLowerCase()) || !t.note ? t.name : `${t.name} · ${t.note.split("\n")[0]}`}
+                query={q}
+                done={t.status === "dropped"}
+                meta={[t.kind, TOOL_STATUS_LABEL[t.status]].filter(Boolean).join(" · ")}
               />
             ))}
           </ul>

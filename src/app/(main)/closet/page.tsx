@@ -96,6 +96,10 @@ export default function ClosetPage() {
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [filter, setFilter] = useState<string | null>(null);
+  // 구매일 기간. 하나라도 정하면 구매일 없는 기록은 빠짐
+  const [periodOpen, setPeriodOpen] = useState(false);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   // 처음엔 이 기기에 저장해 둔 목록을 먼저 보여주고, 받아오면 최신으로
   const [loaded, setLoaded] = useState(false);
@@ -140,7 +144,13 @@ export default function ClosetPage() {
 
   const categories = [...new Set(clothes.map((c) => c.category))];
   const activeFilter = filter && categories.includes(filter as Clothing["category"]) ? filter : null;
-  const visible = activeFilter ? clothes.filter((c) => c.category === activeFilter) : clothes;
+  const visible = clothes.filter((c) => {
+    if (activeFilter && c.category !== activeFilter) return false;
+    if (dateFrom && (!c.purchase_date || c.purchase_date < dateFrom)) return false;
+    if (dateTo && (!c.purchase_date || c.purchase_date > dateTo)) return false;
+    return true;
+  });
+  const periodSet = !!(dateFrom || dateTo);
   const sources = [...new Set(clothes.map((c) => c.source).filter(Boolean))];
 
   return (
@@ -197,16 +207,64 @@ export default function ClosetPage() {
             </button>
           )}
 
-          {categories.length > 1 && (
+          {clothes.length > 0 && (
             <div className="mt-6 flex flex-wrap gap-1.5">
-              <button type="button" onClick={() => setFilter(null)} aria-pressed={!activeFilter} className="chip h-7 px-3">
-                전체
+              {categories.length > 1 && (
+                <>
+                  <button type="button" onClick={() => setFilter(null)} aria-pressed={!activeFilter} className="chip h-7 px-3">
+                    전체
+                  </button>
+                  {categories.map((c) => (
+                    <button key={c} type="button" onClick={() => setFilter(c)} aria-pressed={activeFilter === c} className="chip h-7 px-3">
+                      {c}
+                    </button>
+                  ))}
+                </>
+              )}
+              <button
+                type="button"
+                onClick={() => setPeriodOpen((v) => !v)}
+                aria-pressed={periodOpen || periodSet}
+                aria-expanded={periodOpen}
+                data-tone="blue"
+                className="chip ml-auto h-7 px-3"
+              >
+                구매일 {periodSet ? "기간 적용 중" : "기간"}
               </button>
-              {categories.map((c) => (
-                <button key={c} type="button" onClick={() => setFilter(c)} aria-pressed={activeFilter === c} className="chip h-7 px-3">
-                  {c}
+            </div>
+          )}
+
+          {periodOpen && (
+            <div className="mt-3 flex items-center gap-2 rounded-xl bg-blue-soft p-3">
+              <input
+                type="date"
+                value={dateFrom}
+                max={dateTo || undefined}
+                onChange={(e) => setDateFrom(e.target.value)}
+                aria-label="구매일 시작"
+                className="field field-sm min-w-0 flex-1"
+              />
+              <span className="text-[13px] text-pencil">~</span>
+              <input
+                type="date"
+                value={dateTo}
+                min={dateFrom || undefined}
+                onChange={(e) => setDateTo(e.target.value)}
+                aria-label="구매일 끝"
+                className="field field-sm min-w-0 flex-1"
+              />
+              {periodSet && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDateFrom("");
+                    setDateTo("");
+                  }}
+                  className="text-btn flex-none"
+                >
+                  초기화
                 </button>
-              ))}
+              )}
             </div>
           )}
 
@@ -234,7 +292,7 @@ export default function ClosetPage() {
               ))}
             </ul>
           ) : loaded ? (
-            <p className="empty">아직 기록한 옷이 없어요.</p>
+            <p className="empty">{clothes.length > 0 ? "조건에 맞는 기록이 없어요." : "아직 기록한 옷이 없어요."}</p>
           ) : (
             <ListSkeleton />
           )}

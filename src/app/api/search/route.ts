@@ -14,7 +14,7 @@ function orValue(pattern: string) {
   return `"${pattern.replace(/["\\]/g, (c) => `\\${c}`)}"`;
 }
 
-// ?q= 할 일·반복 할 일·일정·장보기·아이디어·옷 제목/내용에서 부분 일치
+// ?q= 할 일·반복 할 일·일정·장보기·아이디어·옷·도구 제목/내용에서 부분 일치
 export async function GET(request: Request) {
   const q = (new URL(request.url).searchParams.get("q") ?? "").trim();
   if (!q) return NextResponse.json({ error: "q required" }, { status: 400 });
@@ -22,7 +22,7 @@ export async function GET(request: Request) {
 
   const pattern = likePattern(q);
   const supabase = createAdminClient();
-  const [todos, recurring, events, products, ideas, clothes] = await Promise.all([
+  const [todos, recurring, events, products, ideas, clothes, tools] = await Promise.all([
     supabase
       .from("note_todos")
       .select("id, title, done, due_date")
@@ -61,9 +61,15 @@ export async function GET(request: Request) {
       .or(`brand.ilike.${orValue(pattern)},fit_notes.ilike.${orValue(pattern)}`)
       .order("created_at", { ascending: false })
       .limit(LIMIT),
+    supabase
+      .from("note_tools")
+      .select("id, name, kind, note, status")
+      .or(`name.ilike.${orValue(pattern)},note.ilike.${orValue(pattern)},kind.ilike.${orValue(pattern)}`)
+      .order("created_at", { ascending: false })
+      .limit(LIMIT),
   ]);
 
-  const error = todos.error ?? recurring.error ?? events.error ?? products.error ?? ideas.error ?? clothes.error;
+  const error = todos.error ?? recurring.error ?? events.error ?? products.error ?? ideas.error ?? clothes.error ?? tools.error;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({
@@ -73,5 +79,6 @@ export async function GET(request: Request) {
     products: products.data ?? [],
     ideas: ideas.data ?? [],
     clothes: clothes.data ?? [],
+    tools: tools.data ?? [],
   });
 }

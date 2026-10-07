@@ -1,4 +1,5 @@
 import { CATEGORY_FIELDS, PART_FIT_FIELDS, isCategory, isFit, type Fit } from "@/lib/closet";
+import { isToolStatus } from "@/lib/tools";
 
 export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 export const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -108,4 +109,41 @@ export function parseClothing(body: unknown): { row: Record<string, unknown> } |
       image_url: imageUrl,
     },
   };
+}
+
+/**
+ * 도구 본문 → note_tools 행. partial이면 들어온 값만 (상태만 바꿀 때)
+ */
+export function parseTool(body: unknown, partial = false): { row: Record<string, unknown> } | { error: string } {
+  if (!body || typeof body !== "object") return { error: "body required" };
+  const b = body as Record<string, unknown>;
+  const row: Record<string, unknown> = {};
+
+  if (!partial || "name" in b) {
+    const name = text(b.name, 100);
+    if (!name) return { error: "name required" };
+    row.name = name;
+  }
+  if (!partial || "url" in b) {
+    const url = httpUrl(b.url);
+    if (url === undefined) return { error: "url invalid" };
+    row.url = url;
+  }
+  if (!partial || "kind" in b) {
+    const kind = text(b.kind, 30);
+    if (kind === undefined) return { error: "kind invalid" };
+    row.kind = kind;
+  }
+  if (!partial || "note" in b) {
+    const note = text(b.note, MAX_NOTES);
+    if (note === undefined) return { error: "note invalid" };
+    row.note = note;
+  }
+  if (!partial || "status" in b) {
+    const status = b.status ?? "want";
+    if (!isToolStatus(status)) return { error: "status invalid" };
+    row.status = status;
+  }
+  if (Object.keys(row).length === 0) return { error: "nothing to update" };
+  return { row };
 }

@@ -8,6 +8,14 @@ import { useLocalCache } from "@/lib/local-cache";
 import { showToast } from "@/lib/toast";
 import { DeleteButton, EditActions, EditButton, InlineEdit } from "@/components/inline-edit";
 import { PageHeader, Section } from "@/components/page";
+import { ToolsPanel } from "./tools-panel";
+
+type View = "ideas" | "tools";
+
+const VIEWS: [View, string][] = [
+  ["ideas", "아이디어"],
+  ["tools", "써볼 도구"],
+];
 
 type Idea = {
   id: string;
@@ -39,6 +47,13 @@ export default function IdeaPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [convertingId, setConvertingId] = useState<string | null>(null);
   const [convertDate, setConvertDate] = useState("");
+  const [view, setView] = useState<View>("ideas");
+
+  // 검색 결과에서 /idea?view=tools 로 들어오면 도구 쪽을 보여줌
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("view") !== "tools") return;
+    Promise.resolve().then(() => setView("tools"));
+  }, []);
 
   // 처음엔 이 기기에 저장해 둔 목록을 먼저 보여주고, 받아오면 최신으로
   const [loaded, setLoaded] = useState(false);
@@ -98,7 +113,39 @@ export default function IdeaPage() {
 
   return (
     <>
-      <PageHeader title="아이디어" sub={!loaded ? "\u00a0" : ideas.length > 0 ? `${ideas.length}개 적어둠` : "떠오른 걸 바로 적어두세요"} />
+      <PageHeader
+        title="아이디어"
+        sub={
+          view === "tools"
+            ? "써보고 싶은 플러그인·도구"
+            : !loaded
+              ? "\u00a0"
+              : ideas.length > 0
+                ? `${ideas.length}개 적어둠`
+                : "떠오른 걸 바로 적어두세요"
+        }
+      />
+
+      <div className="mb-6 flex gap-1 rounded-full bg-grid p-1" role="tablist">
+        {VIEWS.map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            role="tab"
+            aria-selected={view === value}
+            onClick={() => setView(value)}
+            className="h-8 flex-1 rounded-full text-[13px] font-medium transition-colors"
+            style={view === value ? { background: "var(--sheet)", color: "var(--navy)" } : { color: "var(--pencil)" }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {view === "tools" ? (
+        <ToolsPanel />
+      ) : (
+        <>
 
       <form onSubmit={addIdea} className="composer">
         <label htmlFor="new-idea" className="composer-label">
@@ -184,6 +231,8 @@ export default function IdeaPage() {
           loaded ? <p className="empty">아직 적어둔 아이디어가 없어요.</p> : <ListSkeleton rows={3} />
         )}
       </Section>
+        </>
+      )}
     </>
   );
 }
