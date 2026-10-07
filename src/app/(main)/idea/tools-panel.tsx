@@ -11,6 +11,7 @@ import { showToast } from "@/lib/toast";
 import { DEFAULT_TOOL_KINDS, TOOL_STATUSES, TOOL_STATUS_LABEL, type Tool, type ToolStatus } from "@/lib/tools";
 
 type Draft = { name: string; url: string; kind: string; note: string };
+type Repo = { name: string; url: string; description: string; stars: number; pushedAt: string };
 
 const KIND_LIST_ID = "tool-kinds";
 const EMPTY: Draft = { name: "", url: "", kind: "", note: "" };
@@ -37,8 +38,38 @@ async function readLink(url: string): Promise<{ name: string; note: string } | n
   }
 }
 
+const STARS = new Intl.NumberFormat("ko-KR", { notation: "compact", maximumFractionDigits: 1 });
+
+/** 이름으로 GitHub 저장소 후보 찾기 (스타 많은 순) */
+async function searchGithub(name: string): Promise<Repo[] | null> {
+  try {
+    const res = await fetch(`/api/github-search?q=${encodeURIComponent(name)}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error ?? "찾지 못했어요");
+    return data.repos;
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : "찾지 못했어요", { tone: "error" });
+    return null;
+  }
+}
+
 function ToolFields({ draft, onChange, kinds }: { draft: Draft; onChange: (next: Draft) => void; kinds: string[] }) {
   const [reading, setReading] = useState(false);
+  const [searching, setSearching] = useState(false);
+  // null = 아직 안 찾음, [] = 찾았는데 없음
+  const [repos, setRepos] = useState<Repo[] | null>(null);
+
+  async function find() {
+    setSearching(true);
+    const found = await searchGithub(draft.name.trim());
+    setSearching(false);
+    if (found) setRepos(found);
+  }
+
+  function pick(repo: Repo) {
+    onChange({ ...draft, url: repo.url, note: draft.note.trim() ? draft.note : repo.description.slice(0, 1000) });
+    setRepos(null);
+  }
 
   async function fill() {
     setReading(true);
@@ -71,6 +102,43 @@ function ToolFields({ draft, onChange, kinds }: { draft: Draft; onChange: (next:
         >
           {reading ? "읽는 중" : "이름 가져오기"}
         </button>
+      </div>
+      <div>
+        <button
+          type="button"
+          onClick={find}
+          disabled={!draft.name.trim() || searching}
+          className="chip h-7 px-3 disabled:opacity-50"
+        >
+          {searching ? "찾는 중" : "이름으로 GitHub에서 찾기"}
+        </button>
+        {repos && (
+          <div className="mt-2 rounded-xl border bg-sheet">
+            {repos.length === 0 ? (
+              <p className="px-3 py-2.5 text-[13px] text-pencil">이 이름의 저장소를 못 찾았어요.</p>
+            ) : (
+              <ul>
+                {repos.map((r, i) => (
+                  <li key={r.url} className={i > 0 ? "border-t" : ""}>
+                    <button type="button" onClick={() => pick(r)} className="block w-full px-3 py-2.5 text-left hover:bg-grid">
+                      <span className="flex items-baseline gap-2">
+                        <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">{r.name}</span>
+                        <span className="flex-none text-[12px] text-pencil">★ {STARS.format(r.stars)}</span>
+                      </span>
+                      {r.description && <span className="mt-0.5 line-clamp-2 block text-[12px] text-pencil">{r.description}</span>}
+                      <span className="mt-0.5 block text-[11px] text-pencil">
+                        {r.pushedAt.slice(0, 10).replaceAll("-", ".")} 업데이트
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <button type="button" onClick={() => setRepos(null)} className="text-btn block px-3 pb-2 pt-1">
+              닫기
+            </button>
+          </div>
+        )}
       </div>
       <div>
         <input
