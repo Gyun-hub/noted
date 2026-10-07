@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { LedgerCheck } from "@/components/ledger-check";
 import { DeleteButton, EditActions, EditButton, InlineEdit } from "@/components/inline-edit";
@@ -11,7 +10,6 @@ import { getJson, send } from "@/lib/api";
 import { ListSkeleton } from "@/components/skeleton";
 import { CACHE_KEYS } from "@/lib/cache-keys";
 import { useLocalCache } from "@/lib/local-cache";
-import { eventKey, isMultiDay, rangeLabel, timeLabelOn, type EventRow } from "@/lib/events";
 import { dismissToast, showToast } from "@/lib/toast";
 
 type Todo = {
@@ -27,8 +25,7 @@ type RecurringTodo = Todo & {
 };
 
 type TodosResponse = { recurring: RecurringTodo[]; oneOff: Todo[] };
-type EventsResponse = { events: EventRow[] };
-type TodayCache = { recurring: RecurringTodo[]; oneOff: Todo[]; events: EventRow[] };
+type TodayCache = { recurring: RecurringTodo[]; oneOff: Todo[] };
 type HistoryResponse = { logs: { todo_id: string; log_date: string; done: boolean }[] };
 
 const UNDO_MS = 4000;
@@ -79,7 +76,6 @@ function RecurringEditor({
 export default function TodayPage() {
   const [recurring, setRecurring] = useState<RecurringTodo[]>([]);
   const [oneOff, setOneOff] = useState<Todo[]>([]);
-  const [events, setEvents] = useState<EventRow[]>([]);
   // 반복 관리 펼쳤을 때만 불러옴. `${todo_id}|${date}` 완료 기록
   const [history, setHistory] = useState<Set<string> | null>(null);
   const [title, setTitle] = useState("");
@@ -96,25 +92,20 @@ export default function TodayPage() {
   const cache = useLocalCache<TodayCache>(
     CACHE_KEYS.today,
     date,
-    loaded ? { recurring, oneOff, events } : null,
+    loaded ? { recurring, oneOff } : null,
     (cached) => {
       setRecurring(cached.recurring);
       setOneOff(cached.oneOff);
-      setEvents(cached.events);
       setLoaded(true);
     },
   );
 
   async function load() {
-    const [todosData, eventsData] = await Promise.all([
-      getJson<TodosResponse>(`/api/todos?date=${date}`),
-      getJson<EventsResponse>(`/api/events?start=${date}&end=${date}`),
-    ]);
-    if (!todosData || !eventsData) return;
+    const todosData = await getJson<TodosResponse>(`/api/todos?date=${date}`);
+    if (!todosData) return;
     cache.markFresh();
     setRecurring(todosData.recurring ?? []);
     setOneOff(todosData.oneOff ?? []);
-    setEvents(eventsData.events ?? []);
     setLoaded(true);
   }
 
@@ -137,7 +128,7 @@ export default function TodayPage() {
     const ok = await send(
       "/api/todos",
       "POST",
-      isRecurring ? { title: title.trim(), isRecurring, weekdays } : { title: title.trim(), dueDate: date },
+      isRecurring ? { title: title.trim(), isRecurring, weekdays } : { title: title.trim() },
     );
     if (!ok) return;
     setTitle("");
@@ -227,32 +218,6 @@ export default function TodayPage() {
         )}
       </PageHeader>
 
-      {events.length > 0 && (
-        <Section
-          title="오늘 일정"
-          tone="navy"
-          aside={
-            <Link href="/calendar" className="text-btn">
-              달력에서 보기
-            </Link>
-          }
-        >
-          <ul>
-            {events.map((e) => (
-              <li key={eventKey(e)} className="row">
-                <span className="w-[4.5rem] flex-none text-[13px] font-semibold leading-tight text-navy">
-                  {timeLabelOn(e, date)}
-                </span>
-                <span className="min-w-0 flex-1">
-                  {e.title}
-                  {isMultiDay(e) && <span className="block text-[12px] text-pencil">{rangeLabel(e)}</span>}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </Section>
-      )}
-
       <form onSubmit={addTodo} className="composer space-y-3">
         <label htmlFor="new-todo" className="composer-label">
           할 일 추가
@@ -262,7 +227,7 @@ export default function TodayPage() {
             id="new-todo"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder={isRecurring ? "매일 또는 요일마다 할 일" : "오늘 할 일을 적어주세요"}
+            placeholder={isRecurring ? "매일 또는 요일마다 할 일" : "해야 할 일을 적어두세요"}
             className="composer-input"
           />
           <button type="submit" aria-label="추가" className="add-btn">

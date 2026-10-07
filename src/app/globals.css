@@ -437,3 +437,20 @@ body {
     animation: none;
   }
 }
+
+/* ---------- 달력: 날짜 아래 일정 제목이 여러 개면 위로 넘김 ---------- */
+
+.day-ticker[data-roll] {
+  animation: day-ticker-up 0.35s ease-out;
+}
+@keyframes day-ticker-up {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .day-ticker[data-roll] {
+    animation: none;
+  }
+}

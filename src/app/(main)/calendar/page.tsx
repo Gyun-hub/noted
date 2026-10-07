@@ -38,6 +38,8 @@ type Kind = "event" | "todo";
 type MonthCache = { events: EventRow[]; todos: Todo[]; recurring: RecurringTodo[]; logs: RecurringLog[] };
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
+// 날짜 아래 제목이 여러 개면 이 간격으로 다음 것으로 넘김
+const TICKER_MS = 3000;
 
 function toDateStr(d: Date) {
   const offset = d.getTimezoneOffset();
@@ -170,6 +172,7 @@ export default function CalendarPage() {
   const [kind, setKind] = useState<Kind>("event");
   const [schedule, setSchedule] = useState<Schedule>(() => emptySchedule(todayStr));
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [tick, setTick] = useState(0);
 
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
@@ -214,6 +217,11 @@ export default function CalendarPage() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [year, month]);
+
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), TICKER_MS);
+    return () => clearInterval(id);
+  }, []);
 
   // 홈 화면에서 /calendar?date=YYYY-MM-DD 로 들어오면 그 날을 선택
   useEffect(() => {
@@ -373,8 +381,16 @@ export default function CalendarPage() {
             const dStr = toDateStr(date);
             const isSelected = dStr === selected;
             const isToday = dStr === todayStr;
-            const hasEvents = !!eventsByDate[dStr]?.length;
-            const hasTodos = !!todosByDate[dStr]?.some((t) => !t.done);
+            const dayEvents = eventsByDate[dStr] ?? [];
+            const dayTodos = (todosByDate[dStr] ?? []).filter((t) => !t.done);
+            const hasEvents = dayEvents.length > 0;
+            const hasTodos = dayTodos.length > 0;
+            const labels = [
+              ...dayEvents.map((e) => ({ title: e.title, color: "var(--navy)" })),
+              ...dayTodos.map((t) => ({ title: t.title, color: "var(--teal)" })),
+            ];
+            const shown = labels.length > 0 ? tick % labels.length : 0;
+            const label = labels[shown];
             return (
               <button
                 key={i}
@@ -382,27 +398,29 @@ export default function CalendarPage() {
                 onClick={() => selectDay(dStr)}
                 aria-pressed={isSelected}
                 aria-label={`${date.getMonth() + 1}월 ${date.getDate()}일${isToday ? " 오늘" : ""}${hasEvents ? ", 일정 있음" : ""}${hasTodos ? ", 할 일 있음" : ""}`}
-                className="relative mx-auto grid h-11 w-11 place-items-center rounded-full text-[15px] transition-colors"
-                style={{
-                  background: isSelected ? "var(--navy)" : isToday ? "var(--mint-soft)" : "transparent",
-                  color: isSelected ? "var(--paper)" : isToday ? "var(--navy)" : "var(--ink)",
-                  fontWeight: isSelected || isToday ? 700 : 400,
-                }}
+                className="flex min-w-0 flex-col items-center gap-0.5 pb-1"
               >
-                <span className="leading-none">{date.getDate()}</span>
-                {/* 점은 숫자 정렬에 끼지 않게 원 바닥에 따로 띄움 */}
-                <span className="absolute bottom-1.5 left-1/2 flex h-1 -translate-x-1/2 gap-[3px]">
-                  {hasEvents && (
+                <span
+                  className="grid h-9 w-9 place-items-center rounded-full text-[15px] leading-none transition-colors"
+                  style={{
+                    background: isSelected ? "var(--navy)" : isToday ? "var(--mint-soft)" : "transparent",
+                    color: isSelected ? "var(--paper)" : isToday ? "var(--navy)" : "var(--ink)",
+                    fontWeight: isSelected || isToday ? 700 : 400,
+                  }}
+                >
+                  {date.getDate()}
+                </span>
+                {/* 제목 한 줄. 여러 개면 TICKER_MS마다 위로 밀려 올라오며 바뀜 */}
+                <span className="h-[14px] w-full overflow-hidden px-0.5 text-center text-[10px] leading-[14px]" aria-hidden="true">
+                  {label && (
                     <span
-                      className="h-1 w-1 rounded-full"
-                      style={{ background: isSelected ? "var(--paper)" : "var(--navy)" }}
-                    />
-                  )}
-                  {hasTodos && (
-                    <span
-                      className="h-1 w-1 rounded-full"
-                      style={{ background: isSelected ? "var(--mint)" : "var(--teal)" }}
-                    />
+                      key={shown}
+                      data-roll={labels.length > 1 ? "" : undefined}
+                      className="day-ticker block truncate"
+                      style={{ color: label.color }}
+                    >
+                      {label.title}
+                    </span>
                   )}
                 </span>
               </button>
