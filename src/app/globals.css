@@ -454,3 +454,44 @@ body {
     animation: none;
   }
 }
+
+/* ---------- 달력: 날짜 누르면 아래에서 올라오는 시트 ---------- */
+
+.day-sheet {
+  width: 100%;
+  max-width: 28rem;
+  max-height: 85dvh;
+  margin: auto auto 0;
+  padding: 0;
+  border: 0;
+  border-radius: 1.25rem 1.25rem 0 0;
+  background: var(--paper);
+  color: var(--ink);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.day-sheet[open] {
+  animation: sheet-up 0.25s ease-out;
+}
+.day-sheet::backdrop {
+  background: rgb(0 0 0 / 0.4);
+}
+.day-sheet-body {
+  padding: 1rem 1.25rem calc(1.25rem + env(safe-area-inset-bottom));
+}
+html:has(.day-sheet[open]) {
+  overflow: hidden;
+}
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .day-sheet[open] {
+    animation: none;
+  }
+}
+.row[data-editing] {
+  background: var(--navy-soft);
+}

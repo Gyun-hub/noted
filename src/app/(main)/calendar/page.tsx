@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { LedgerCheck } from "@/components/ledger-check";
 import { DeleteButton, EditActions, EditButton } from "@/components/inline-edit";
 import { AddIcon, PageHeader } from "@/components/page";
@@ -81,72 +81,58 @@ function eventToSchedule(e: EventRow): Schedule {
   };
 }
 
-function EventEditor({
-  event,
-  onSave,
-  onCancel,
-}: {
-  event: EventRow;
-  onSave: (title: string, schedule: Schedule) => void;
-  onCancel: () => void;
-}) {
-  const [title, setTitle] = useState(event.title);
-  const [schedule, setSchedule] = useState(() => eventToSchedule(event));
-
-  function submit(e: React.FormEvent) {
-    e.preventDefault();
-    const next = title.trim();
-    if (!next || scheduleToBody(schedule).error) return;
-    onSave(next, schedule);
-  }
-
-  return (
-    <form onSubmit={submit} onKeyDown={(e) => e.key === "Escape" && onCancel()} className="w-full space-y-3 py-2">
-      <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} aria-label="일정 이름" className="field" />
-      <ScheduleFields value={schedule} onChange={setSchedule} />
-      {event.repeat && <p className="text-[12px] text-pencil">반복 일정은 모든 회차가 함께 바뀌어요</p>}
-      <div className="flex justify-end">
-        <EditActions onCancel={onCancel} />
-      </div>
-    </form>
+/** "2026-10-31" -> "10월 31일 (토)" */
+function dayLabel(date: string) {
+  return new Intl.DateTimeFormat("ko-KR", { month: "long", day: "numeric", weekday: "short" }).format(
+    new Date(`${date}T00:00:00`),
   );
 }
 
-function TodoEditor({
-  todo,
-  onSave,
-  onCancel,
-}: {
-  todo: Todo;
-  onSave: (title: string, date: string) => void;
-  onCancel: () => void;
-}) {
-  const [title, setTitle] = useState(todo.title);
-  const [date, setDate] = useState(todo.due_date);
-
-  function submit(e: React.FormEvent) {
-    e.preventDefault();
-    const next = title.trim();
-    if (!next || !date || (next === todo.title && date === todo.due_date)) return onCancel();
-    onSave(next, date);
+function EventDetail({ event, onClose }: { event: EventRow; onClose: () => void }) {
+  const start = shortTime(event.event_time);
+  const end = shortTime(event.end_time);
+  const rows: [string, string][] = isMultiDay(event)
+    ? [
+        ["시작", [dayLabel(event.event_date), start].filter(Boolean).join(" ")],
+        ["끝", [dayLabel(endDateOf(event)), end].filter(Boolean).join(" ")],
+      ]
+    : [
+        ["날짜", dayLabel(event.event_date)],
+        ["시간", start && end ? `${start} – ${end}` : start || "종일"],
+      ];
+  if (event.repeat) {
+    rows.push(["반복", `${REPEAT_LABEL[event.repeat]}${event.repeat_until ? ` · ${dayLabel(event.repeat_until)}까지` : ""}`]);
+    if (event.series) rows.push(["첫 회", dayLabel(event.series.event_date)]);
   }
 
   return (
-    <form onSubmit={submit} onKeyDown={(e) => e.key === "Escape" && onCancel()} className="w-full space-y-2 py-2">
-      <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} aria-label="할 일" className="field" />
-      <div className="flex flex-wrap items-center gap-3">
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          aria-label="날짜"
-          className="field field-sm w-auto"
-        />
-        <div className="ml-auto">
-          <EditActions onCancel={onCancel} />
-        </div>
+    <div className="w-full py-2">
+      <p className="text-[17px] font-semibold">{event.title}</p>
+      <dl className="mt-2 space-y-1 text-[14px]">
+        {rows.map(([label, value]) => (
+          <div key={label} className="flex gap-3">
+            <dt className="w-10 flex-none text-pencil">{label}</dt>
+            <dd>{value}</dd>
+          </div>
+        ))}
+      </dl>
+      <div className="mt-2 flex justify-end">
+        <button type="button" onClick={onClose} className="h-8 px-2 text-[13px] text-pencil hover:text-ink">
+          닫기
+        </button>
       </div>
-    </form>
+    </div>
+  );
+}
+
+function DetailButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} aria-label="상세" className="icon-btn">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.7" />
+        <path d="M12 11v5M12 8h.01" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+      </svg>
+    </button>
   );
 }
 
@@ -171,7 +157,12 @@ export default function CalendarPage() {
   const [title, setTitle] = useState("");
   const [kind, setKind] = useState<Kind>("event");
   const [schedule, setSchedule] = useState<Schedule>(() => emptySchedule(todayStr));
+  // 수정 중인 일정/할 일 id. 있으면 아래 입력 폼이 수정 폼이 됨
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [todoDate, setTodoDate] = useState(todayStr);
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const sheetRef = useRef<HTMLDialogElement>(null);
   const [tick, setTick] = useState(0);
 
   const year = cursor.getFullYear();
@@ -231,7 +222,15 @@ export default function CalendarPage() {
     setCursor(new Date(y, m - 1, 1));
     setSelected(date);
     setSchedule(emptySchedule(date));
+    setSheetOpen(true);
   }, []);
+
+  useEffect(() => {
+    const sheet = sheetRef.current;
+    if (!sheet) return;
+    if (sheetOpen && !sheet.open) sheet.showModal();
+    if (!sheetOpen && sheet.open) sheet.close();
+  }, [sheetOpen]);
 
   // 기간 일정은 이번 달 안의 모든 날짜에 펼침
   const eventsByDate = useMemo(() => {
@@ -262,33 +261,65 @@ export default function CalendarPage() {
 
   function selectDay(date: string) {
     setSelected(date);
+    resetComposer(date);
+    setDetailId(null);
+  }
+
+  function resetComposer(date = selected) {
+    setTitle("");
     setSchedule(emptySchedule(date));
     setEditingId(null);
   }
 
+  function editEvent(event: EventRow) {
+    setDetailId(null);
+    setEditingId(event.id);
+    setKind("event");
+    setTitle(event.title);
+    setSchedule(eventToSchedule(event));
+    focusComposer();
+  }
+
+  function editTodo(todo: Todo) {
+    setDetailId(null);
+    setEditingId(todo.id);
+    setKind("todo");
+    setTitle(todo.title);
+    setTodoDate(todo.due_date);
+    focusComposer();
+  }
+
+  function focusComposer() {
+    const input = document.getElementById("new-entry");
+    input?.scrollIntoView({ behavior: "smooth", block: "center" });
+    input?.focus({ preventScroll: true });
+  }
+
+  function openDay(date: string) {
+    selectDay(date);
+    setSheetOpen(true);
+  }
+
   async function add(e: React.FormEvent) {
     e.preventDefault();
-    if (!title.trim()) return;
+    const name = title.trim();
+    if (!name) return;
 
     let ok: boolean;
     if (kind === "event") {
       const parsed = scheduleToBody(schedule);
       if (parsed.error) return showToast(parsed.error, { tone: "error" });
-      ok = await send("/api/events", "POST", { title: title.trim(), ...parsed.body });
+      ok = editingId
+        ? await send(`/api/events/${editingId}`, "PATCH", { title: name, ...parsed.body })
+        : await send("/api/events", "POST", { title: name, ...parsed.body });
+    } else if (editingId) {
+      if (!todoDate) return;
+      ok = await send(`/api/todos/${editingId}`, "PATCH", { title: name, dueDate: todoDate });
     } else {
-      ok = await send("/api/todos", "POST", { title: title.trim(), dueDate: selected });
+      ok = await send("/api/todos", "POST", { title: name, dueDate: selected });
     }
     if (!ok) return;
-    setTitle("");
-    setSchedule(emptySchedule(selected));
-    load();
-  }
-
-  async function saveEvent(id: string, nextTitle: string, next: Schedule) {
-    const parsed = scheduleToBody(next);
-    if (parsed.error) return showToast(parsed.error, { tone: "error" });
-    setEditingId(null);
-    await send(`/api/events/${id}`, "PATCH", { title: nextTitle, ...parsed.body });
+    resetComposer();
     load();
   }
 
@@ -299,13 +330,6 @@ export default function CalendarPage() {
     if (!confirm(message)) return;
     setEvents((list) => list.filter((e) => e.id !== event.id));
     if (!(await send(`/api/events/${event.id}`, "DELETE"))) load();
-  }
-
-  async function saveTodo(id: string, nextTitle: string, dueDate: string) {
-    setEditingId(null);
-    setTodos((list) => list.map((t) => (t.id === id ? { ...t, title: nextTitle, due_date: dueDate } : t)));
-    await send(`/api/todos/${id}`, "PATCH", { title: nextTitle, dueDate });
-    load();
   }
 
   async function removeTodo(todo: Todo) {
@@ -395,7 +419,7 @@ export default function CalendarPage() {
               <button
                 key={i}
                 type="button"
-                onClick={() => selectDay(dStr)}
+                onClick={() => openDay(dStr)}
                 aria-pressed={isSelected}
                 aria-label={`${date.getMonth() + 1}월 ${date.getDate()}일${isToday ? " 오늘" : ""}${hasEvents ? ", 일정 있음" : ""}${hasTodos ? ", 할 일 있음" : ""}`}
                 className="flex min-w-0 flex-col items-center gap-0.5 pb-1"
@@ -438,129 +462,159 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      <h2 className="section-head" data-tone="navy">
-        <span>{selectedLabel}</span>
-        {selected === todayStr && <span className="aside">오늘</span>}
-      </h2>
+      <dialog
+        ref={sheetRef}
+        className="day-sheet"
+        aria-label={selectedLabel}
+        onClose={() => {
+          setSheetOpen(false);
+          resetComposer();
+          setDetailId(null);
+        }}
+        // 시트 바깥(배경)을 누르면 닫힘. 안쪽 클릭은 div가 받음
+        onClick={(e) => e.target === e.currentTarget && setSheetOpen(false)}
+      >
+        <div className="day-sheet-body">
+          <h2 className="section-head" data-tone="navy" style={{ alignItems: "center" }}>
+            <span>{selectedLabel}</span>
+            <span className="flex items-center gap-2">
+              {selected === todayStr && <span className="aside">오늘</span>}
+              <button type="button" aria-label="닫기" onClick={() => setSheetOpen(false)} className="icon-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                </svg>
+              </button>
+            </span>
+          </h2>
 
-      <form onSubmit={add} className="composer mt-4 space-y-3">
-        <label htmlFor="new-entry" className="composer-label">
-          {kind === "event" ? "일정 추가" : "이날 할 일 추가"}
-        </label>
-        <div className="flex items-center gap-3">
-          <input
-            id="new-entry"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder={kind === "event" ? "일정 이름" : "할 일"}
-            className="composer-input"
-          />
-          <button type="submit" aria-label="추가" className="add-btn">
-            <AddIcon />
-          </button>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 border-t pt-3">
-          {(
-            [
-              ["event", "일정"],
-              ["todo", "할 일"],
-            ] as const
-          ).map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => setKind(value)}
-              aria-pressed={kind === value}
-              className="chip"
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        {kind === "event" && <ScheduleFields value={schedule} onChange={setSchedule} />}
-      </form>
+          {!monthReady ? <ListSkeleton rows={2} /> : isEmpty && <p className="empty">이날은 비어 있어요.</p>}
 
-      {!monthReady ? <ListSkeleton rows={2} /> : isEmpty && <p className="empty">이날은 비어 있어요.</p>}
-
-      {selectedEvents.length > 0 && (
-        <>
-          <GroupTitle color="var(--navy)">일정</GroupTitle>
-          <ul>
-            {selectedEvents.map((e) => (
-              <li key={eventKey(e)} className="row">
-                {editingId === e.id ? (
-                  <EventEditor
-                    event={e}
-                    onSave={(nextTitle, next) => saveEvent(e.id, nextTitle, next)}
-                    onCancel={() => setEditingId(null)}
-                  />
-                ) : (
-                  <>
-                    <span className="w-[4.5rem] flex-none text-[13px] font-semibold leading-tight text-navy">
-                      {timeLabelOn(e, selected)}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      {e.title}
-                      {e.repeat && (
-                        <span className="ml-1.5 rounded-full bg-navy-soft px-1.5 py-0.5 align-middle text-[11px] text-navy">
-                          {REPEAT_LABEL[e.repeat]}
+          {selectedEvents.length > 0 && (
+            <>
+              <GroupTitle color="var(--navy)">일정</GroupTitle>
+              <ul>
+                {selectedEvents.map((e) => (
+                  <li key={eventKey(e)} className="row" data-editing={editingId === e.id || undefined}>
+                    {detailId === eventKey(e) ? (
+                      <EventDetail event={e} onClose={() => setDetailId(null)} />
+                    ) : (
+                      <>
+                        <span className="w-[4.5rem] flex-none text-[13px] font-semibold leading-tight text-navy">
+                          {timeLabelOn(e, selected)}
                         </span>
-                      )}
-                      {isMultiDay(e) && <span className="block text-[12px] text-pencil">{rangeLabel(e)}</span>}
-                    </span>
-                    <EditButton onClick={() => setEditingId(e.id)} />
-                    <DeleteButton onClick={() => removeEvent(e)} />
-                  </>
-                )}
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
+                        <span className="min-w-0 flex-1">
+                          {e.title}
+                          {e.repeat && (
+                            <span className="ml-1.5 rounded-full bg-navy-soft px-1.5 py-0.5 align-middle text-[11px] text-navy">
+                              {REPEAT_LABEL[e.repeat]}
+                            </span>
+                          )}
+                          {isMultiDay(e) && <span className="block text-[12px] text-pencil">{rangeLabel(e)}</span>}
+                        </span>
+                        <DetailButton onClick={() => setDetailId(eventKey(e))} />
+                        <EditButton onClick={() => editEvent(e)} />
+                        <DeleteButton onClick={() => removeEvent(e)} />
+                      </>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
 
-      {selectedTodos.length > 0 && (
-        <>
-          <GroupTitle color="var(--ink)">할 일</GroupTitle>
-          <ul>
-            {selectedTodos.map((t) => (
-              <li key={t.id} className="row">
-                {editingId === t.id ? (
-                  <TodoEditor
-                    todo={t}
-                    onSave={(nextTitle, date) => saveTodo(t.id, nextTitle, date)}
-                    onCancel={() => setEditingId(null)}
-                  />
-                ) : (
-                  <>
+          {selectedTodos.length > 0 && (
+            <>
+              <GroupTitle color="var(--ink)">할 일</GroupTitle>
+              <ul>
+                {selectedTodos.map((t) => (
+                  <li key={t.id} className="row" data-editing={editingId === t.id || undefined}>
                     <LedgerCheck checked={t.done} onChange={() => toggleTodo(t.id, t.done)}>
                       {t.title}
                     </LedgerCheck>
-                    <EditButton onClick={() => setEditingId(t.id)} />
+                    <EditButton onClick={() => editTodo(t)} />
                     <DeleteButton onClick={() => removeTodo(t)} />
-                  </>
-                )}
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
 
-      {selectedRecurring.length > 0 && (
-        <>
-          <GroupTitle color="var(--blue)" aside={`${recurringDoneCount} / ${selectedRecurring.length}`}>
-            반복
-          </GroupTitle>
-          <ul>
-            {selectedRecurring.map((r) => (
-              <li key={r.id} className="row">
-                <LedgerCheck checked={r.done} onChange={() => toggleRecurring(r.id, r.done)} tone="blue">
-                  {r.title}
-                </LedgerCheck>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
+          {selectedRecurring.length > 0 && (
+            <>
+              <GroupTitle color="var(--blue)" aside={`${recurringDoneCount} / ${selectedRecurring.length}`}>
+                반복
+              </GroupTitle>
+              <ul>
+                {selectedRecurring.map((r) => (
+                  <li key={r.id} className="row">
+                    <LedgerCheck checked={r.done} onChange={() => toggleRecurring(r.id, r.done)} tone="blue">
+                      {r.title}
+                    </LedgerCheck>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+
+          <form onSubmit={add} className="composer mt-6 space-y-3" style={{ marginBottom: 0 }}>
+            <label htmlFor="new-entry" className="composer-label">
+              {editingId ? (kind === "event" ? "일정 수정" : "할 일 수정") : kind === "event" ? "일정 추가" : "이날 할 일 추가"}
+            </label>
+            <div className="flex items-center gap-3">
+              <input
+                id="new-entry"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder={kind === "event" ? "일정 이름" : "할 일"}
+                className="composer-input"
+              />
+              {editingId ? (
+                <EditActions onCancel={() => resetComposer()} />
+              ) : (
+                <button type="submit" aria-label="추가" className="add-btn">
+                  <AddIcon />
+                </button>
+              )}
+            </div>
+            {editingId ? (
+              kind === "todo" && (
+                <div className="border-t pt-3">
+                  <input
+                    type="date"
+                    value={todoDate}
+                    onChange={(e) => setTodoDate(e.target.value)}
+                    aria-label="날짜"
+                    className="field field-sm w-auto"
+                  />
+                </div>
+              )
+            ) : (
+              <div className="flex flex-wrap items-center gap-2 border-t pt-3">
+                {(
+                  [
+                    ["event", "일정"],
+                    ["todo", "할 일"],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setKind(value)}
+                    aria-pressed={kind === value}
+                    className="chip"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {kind === "event" && editingId && events.find((e) => e.id === editingId)?.repeat && (
+              <p className="text-[12px] text-pencil">반복 일정은 모든 회차가 함께 바뀌어요</p>
+            )}
+            {kind === "event" && <ScheduleFields value={schedule} onChange={setSchedule} />}
+          </form>
+        </div>
+      </dialog>
     </>
   );
 }
