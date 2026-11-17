@@ -18,18 +18,25 @@ function signed(n: number) {
   return `${n > 0 ? "+" : ""}${n.toFixed(1)}`;
 }
 
-/** 사려는 옷 실측을 넣으면 내 기준(직접 정한 값 또는 내 옷 평균)과 비교 */
+/**
+ * 사려는 옷 실측을 넣으면 내 기준(직접 정한 값 또는 내 옷 평균)과 비교.
+ * initial을 넘기면 '구매 후보'에서 고른 옷의 실측이 미리 채워짐 (page에서 key로 다시 그림)
+ */
 export function ClosetCheck({
   clothes,
   baselines,
   onEditBaseline,
+  initial,
 }: {
   clothes: Clothing[];
   baselines: Baselines;
   onEditBaseline: () => void;
+  initial?: { category: Category; values: Record<string, number> };
 }) {
-  const [category, setCategory] = useState<Category>("상의");
-  const [values, setValues] = useState<Record<string, string>>({});
+  const [category, setCategory] = useState<Category>(initial?.category ?? "상의");
+  const [values, setValues] = useState<Record<string, string>>(() =>
+    Object.fromEntries(Object.entries(initial?.values ?? {}).map(([field, value]) => [field, String(value)])),
+  );
   // 쇼핑몰마다 가슴을 단면/둘레로 다르게 적어서, 둘레면 반으로 나눠 비교
   const [chestRound, setChestRound] = useState(false);
   const [result, setResult] = useState<JudgeResult | null>(null);
@@ -63,6 +70,7 @@ export function ClosetCheck({
       <p className="text-[13px] text-pencil">
         사려는 옷의 실측을 넣으면 내 기준과 비교해요. 1cm 차이까지는 적당으로 봐요.
       </p>
+      {initial && <p className="mt-1 text-[12px] text-navy">구매 후보에서 불러온 실측이에요. 고친 뒤 판정하기를 눌러 주세요.</p>}
 
       <form onSubmit={check} className="composer mt-4 space-y-4">
         <div className="flex flex-wrap gap-1.5">

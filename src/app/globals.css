@@ -235,6 +235,15 @@ body {
   color: var(--ink);
 }
 
+/* 탭이 많아 가로로 넘칠 때: 스크롤은 되되 스크롤바는 숨김 */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* ---------- 체크박스: 펜으로 긋는 체크 ---------- */
 
 .pen-check {
