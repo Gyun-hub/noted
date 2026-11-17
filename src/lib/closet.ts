@@ -82,6 +82,8 @@ export type FieldResult = {
   baseline: number | null;
   diff: number | null;
   sampleSize: number;
+  /** 비교 기준을 어디서 가져왔는지: 직접 정한 기준 사이즈 / 내 옷들 평균 / 비교할 것 없음 */
+  source: "mine" | "average" | "none";
   tone: "tight" | "ok" | "loose" | "none";
   label: string;
 };
@@ -90,6 +92,8 @@ export type JudgeResult = {
   overall: "tight" | "ok" | "loose" | "unknown";
   overallLabel: string;
   fields: FieldResult[];
+  /** 직접 정한 기준 사이즈와 비교한 항목이 하나라도 있는지 */
+  usedOwnBaseline: boolean;
   /** '적당함' 기록이 없어 같은 카테고리 전체 평균과 비교했는지 */
   usedFallback: boolean;
 };
@@ -102,40 +106,67 @@ export function average(nums: number[]) {
   return nums.reduce((a, b) => a + b, 0) / nums.length;
 }
 
+/** 실측값 하나를 기준값과 비교 (1cm 차이까지는 적당) */
+function compareField(field: string, target: number, baseline: number, sampleSize: number, source: FieldResult["source"]): FieldResult {
+  const diff = target - baseline;
+  const length = isLengthField(field);
+  if (diff < -TOLERANCE_CM) {
+    return { field, target, baseline, diff, sampleSize, source, tone: "tight", label: length ? "짧음" : "타이트함" };
+  }
+  if (diff > TOLERANCE_CM) {
+    return { field, target, baseline, diff, sampleSize, source, tone: "loose", label: length ? "김" : "넉넉함" };
+  }
+  return { field, target, baseline, diff, sampleSize, source, tone: "ok", label: "적당" };
+}
+
 /**
- * 같은 카테고리에서 '적당함'이었던 옷들의 항목별 평균과 비교.
+ * 새 옷 실측을 내 기준과 비교.
+ * 직접 정한 기준 사이즈(own)가 있는 항목은 그 값과 먼저 비교하고,
+ * 비어 있는 항목만 같은 카테고리에서 '적당함'이었던 옷들의 평균을 씀.
  * 길이 항목은 짧음/김, 나머지는 타이트함/넉넉함. 종합은 어느 쪽 판정이 더 많은지로.
  */
-export function judgeFit(category: Category, target: Record<string, number>, records: Clothing[]): JudgeResult {
+export function judgeFit(
+  category: Category,
+  target: Record<string, number>,
+  records: Clothing[],
+  own?: Record<string, number> | null,
+): JudgeResult {
   const sameCategory = records.filter((r) => r.category === category);
-  let baseline = sameCategory.filter((r) => r.fit_overall === "perfect");
-  const usedFallback = baseline.length === 0;
-  if (usedFallback) baseline = sameCategory;
+  const perfect = sameCategory.filter((r) => r.fit_overall === "perfect");
+  const usedFallback = perfect.length === 0;
+  const averageRecords = usedFallback ? sameCategory : perfect;
 
   const fields: FieldResult[] = Object.entries(target).map(([field, value]) => {
-    const samples = baseline.map((r) => r.measurements[field]).filter((v) => typeof v === "number" && Number.isFinite(v));
+    const mine = own?.[field];
+    if (typeof mine === "number" && Number.isFinite(mine) && mine > 0) {
+      return compareField(field, value, mine, 0, "mine");
+    }
+    const samples = averageRecords
+      .map((r) => r.measurements[field])
+      .filter((v): v is number => typeof v === "number" && Number.isFinite(v));
     if (samples.length === 0) {
-      return { field, target: value, baseline: null, diff: null, sampleSize: 0, tone: "none", label: "비교할 기록 없음" };
+      return { field, target: value, baseline: null, diff: null, sampleSize: 0, source: "none", tone: "none", label: "비교할 기록 없음" };
     }
-    const base = average(samples);
-    const diff = value - base;
-    const length = isLengthField(field);
-    if (diff < -TOLERANCE_CM) {
-      return { field, target: value, baseline: base, diff, sampleSize: samples.length, tone: "tight", label: length ? "짧음" : "타이트함" };
-    }
-    if (diff > TOLERANCE_CM) {
-      return { field, target: value, baseline: base, diff, sampleSize: samples.length, tone: "loose", label: length ? "김" : "넉넉함" };
-    }
-    return { field, target: value, baseline: base, diff, sampleSize: samples.length, tone: "ok", label: "적당" };
+    return compareField(field, value, average(samples), samples.length, "average");
   });
 
   const comparable = fields.filter((f) => f.tone !== "none");
   const tight = comparable.filter((f) => f.tone === "tight").length;
   const loose = comparable.filter((f) => f.tone === "loose").length;
+  const usedOwnBaseline = fields.some((f) => f.source === "mine");
+  const fellBack = usedFallback && fields.some((f) => f.source === "average");
 
-  if (comparable.length === 0) return { overall: "unknown", overallLabel: "판정할 기록이 부족해요", fields, usedFallback };
-  if (tight === 0 && loose === 0) return { overall: "ok", overallLabel: "적당할 것 같아요", fields, usedFallback };
-  if (tight > loose) return { overall: "tight", overallLabel: "작을 가능성이 높아요", fields, usedFallback };
-  if (loose > tight) return { overall: "loose", overallLabel: "클 가능성이 높아요", fields, usedFallback };
-  return { overall: "ok", overallLabel: "적당해 보이지만 항목마다 달라요", fields, usedFallback };
+  if (comparable.length === 0) {
+    return { overall: "unknown", overallLabel: "판정할 기록이 부족해요", fields, usedOwnBaseline, usedFallback: fellBack };
+  }
+  if (tight === 0 && loose === 0) {
+    return { overall: "ok", overallLabel: "적당할 것 같아요", fields, usedOwnBaseline, usedFallback: fellBack };
+  }
+  if (tight > loose) {
+    return { overall: "tight", overallLabel: "작을 가능성이 높아요", fields, usedOwnBaseline, usedFallback: fellBack };
+  }
+  if (loose > tight) {
+    return { overall: "loose", overallLabel: "클 가능성이 높아요", fields, usedOwnBaseline, usedFallback: fellBack };
+  }
+  return { overall: "ok", overallLabel: "적당해 보이지만 항목마다 달라요", fields, usedOwnBaseline, usedFallback: fellBack };
 }
