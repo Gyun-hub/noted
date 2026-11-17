@@ -7,18 +7,21 @@ import { PageHeader } from "@/components/page";
 import { ListSkeleton } from "@/components/skeleton";
 import { getJson, send } from "@/lib/api";
 import { CACHE_KEYS } from "@/lib/cache-keys";
-import { FIT_LABEL, type Clothing, type ClothingInput, type Fit } from "@/lib/closet";
+import { FIT_LABEL, type Category, type Clothing, type ClothingInput, type Fit } from "@/lib/closet";
 import { useBaselines } from "@/lib/closet-baseline";
+import type { WishlistCandidate } from "@/lib/closet-wishlist";
 import { useLocalCache } from "@/lib/local-cache";
 import { ClosetBaseline } from "./closet-baseline";
 import { ClosetCheck } from "./closet-check";
 import { ClosetForm, SOURCE_LIST_ID } from "./closet-form";
 import { ClosetStats } from "./closet-stats";
+import { ClosetWishlist } from "./closet-wishlist";
 
-type View = "list" | "check" | "baseline" | "stats";
+type View = "list" | "wishlist" | "check" | "baseline" | "stats";
 
 const VIEWS: [View, string][] = [
   ["list", "내 옷"],
+  ["wishlist", "구매 후보"],
   ["check", "새 옷 판정"],
   ["baseline", "기준 사이즈"],
   ["stats", "사이즈 통계"],
@@ -96,6 +99,8 @@ function fetchClothes() {
 export default function ClosetPage() {
   const [clothes, setClothes] = useState<Clothing[]>([]);
   const [view, setView] = useState<View>("list");
+  // 구매 후보에서 '새 옷 판정'으로 넘길 실측 (n을 바꿔 폼을 새로 그림)
+  const [checkSeed, setCheckSeed] = useState<{ n: number; category: Category; values: Record<string, number> } | null>(null);
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [filter, setFilter] = useState<string | null>(null);
@@ -142,6 +147,16 @@ export default function ClosetPage() {
     load();
   }
 
+  /** 구매 후보의 실측을 새 옷 판정 폼에 채워서 넘어감 */
+  function checkCandidate(candidate: WishlistCandidate) {
+    setCheckSeed((prev) => ({
+      n: (prev?.n ?? 0) + 1,
+      category: candidate.category,
+      values: { ...candidate.measurements },
+    }));
+    setView("check");
+  }
+
   async function remove(item: Clothing) {
     if (!confirm(`"${item.brand}" 기록을 지울까요?`)) return;
     setClothes((list) => list.filter((c) => c.id !== item.id));
@@ -169,7 +184,7 @@ export default function ClosetPage() {
         ))}
       </datalist>
 
-      <div className="mb-6 flex gap-1 rounded-full bg-grid p-1" role="tablist">
+      <div className="no-scrollbar mb-6 flex gap-1 overflow-x-auto rounded-full bg-grid p-1" role="tablist">
         {VIEWS.map(([value, label]) => (
           <button
             key={value}
@@ -177,7 +192,7 @@ export default function ClosetPage() {
             role="tab"
             aria-selected={view === value}
             onClick={() => setView(value)}
-            className="h-8 flex-1 whitespace-nowrap rounded-full text-[12px] font-medium transition-colors"
+            className="h-8 flex-1 whitespace-nowrap rounded-full px-1 text-[11.5px] font-medium transition-colors"
             style={view === value ? { background: "var(--sheet)", color: "var(--navy)" } : { color: "var(--pencil)" }}
           >
             {label}
@@ -185,10 +200,17 @@ export default function ClosetPage() {
         ))}
       </div>
 
+      {view === "wishlist" && <ClosetWishlist onCheck={checkCandidate} />}
       {view === "check" && (
         <>
           {loaded ? (
-            <ClosetCheck clothes={clothes} baselines={baseline.baselines} onEditBaseline={() => setView("baseline")} />
+            <ClosetCheck
+              key={checkSeed?.n ?? 0}
+              initial={checkSeed ? { category: checkSeed.category, values: checkSeed.values } : undefined}
+              clothes={clothes}
+              baselines={baseline.baselines}
+              onEditBaseline={() => setView("baseline")}
+            />
           ) : (
             <ListSkeleton rows={3} />
           )}
