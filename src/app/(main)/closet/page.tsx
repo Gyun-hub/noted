@@ -8,16 +8,19 @@ import { ListSkeleton } from "@/components/skeleton";
 import { getJson, send } from "@/lib/api";
 import { CACHE_KEYS } from "@/lib/cache-keys";
 import { FIT_LABEL, type Clothing, type ClothingInput, type Fit } from "@/lib/closet";
+import { useBaselines } from "@/lib/closet-baseline";
 import { useLocalCache } from "@/lib/local-cache";
+import { ClosetBaseline } from "./closet-baseline";
 import { ClosetCheck } from "./closet-check";
 import { ClosetForm, SOURCE_LIST_ID } from "./closet-form";
 import { ClosetStats } from "./closet-stats";
 
-type View = "list" | "check" | "stats";
+type View = "list" | "check" | "baseline" | "stats";
 
 const VIEWS: [View, string][] = [
   ["list", "내 옷"],
   ["check", "새 옷 판정"],
+  ["baseline", "기준 사이즈"],
   ["stats", "사이즈 통계"],
 ];
 
@@ -108,6 +111,9 @@ export default function ClosetPage() {
     setLoaded(true);
   });
 
+  // 직접 적어 둔 기준 사이즈 (이 기기 저장)
+  const baseline = useBaselines();
+
   function apply(data: { clothes: Clothing[] } | null) {
     if (!data) return;
     cache.markFresh();
@@ -171,7 +177,7 @@ export default function ClosetPage() {
             role="tab"
             aria-selected={view === value}
             onClick={() => setView(value)}
-            className="h-8 flex-1 rounded-full text-[13px] font-medium transition-colors"
+            className="h-8 flex-1 whitespace-nowrap rounded-full text-[12px] font-medium transition-colors"
             style={view === value ? { background: "var(--sheet)", color: "var(--navy)" } : { color: "var(--pencil)" }}
           >
             {label}
@@ -179,7 +185,16 @@ export default function ClosetPage() {
         ))}
       </div>
 
-      {view === "check" && (loaded ? <ClosetCheck clothes={clothes} /> : <ListSkeleton rows={3} />)}
+      {view === "check" && (
+        <>
+          {loaded ? (
+            <ClosetCheck clothes={clothes} baselines={baseline.baselines} onEditBaseline={() => setView("baseline")} />
+          ) : (
+            <ListSkeleton rows={3} />
+          )}
+        </>
+      )}
+      {view === "baseline" && <ClosetBaseline clothes={clothes} baselines={baseline.baselines} onSave={baseline.saveCategory} />}
       {view === "stats" && (loaded ? <ClosetStats clothes={clothes} /> : <ListSkeleton rows={3} />)}
 
       {view === "list" && (
