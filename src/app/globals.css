@@ -19,6 +19,8 @@
   --teal: #49a4bb;
   --mint: #15d8b3;
   --mint-soft: #c8f5ec;
+  --purple: #7c3aed;
+  --purple-soft: #ede9fe;
   color-scheme: light;
 }
 
@@ -37,6 +39,8 @@
     --teal: #5bbad0;
     --mint: #2de3c0;
     --mint-soft: #0f3b36;
+    --purple: #a78bfa;
+    --purple-soft: #2e1065;
     color-scheme: dark;
   }
 }
@@ -55,6 +59,8 @@
   --color-teal: var(--teal);
   --color-mint: var(--mint);
   --color-mint-soft: var(--mint-soft);
+  --color-purple: var(--purple);
+  --color-purple-soft: var(--purple-soft);
   --font-sans: "Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
 }
 

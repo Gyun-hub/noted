@@ -10,7 +10,20 @@ import { getJson, send } from "@/lib/api";
 import { ListSkeleton } from "@/components/skeleton";
 import { CACHE_KEYS } from "@/lib/cache-keys";
 import { useLocalCache } from "@/lib/local-cache";
-import { REPEAT_LABEL, endDateOf, eventKey, isMultiDay, rangeLabel, shortTime, timeLabelOn, type EventRow } from "@/lib/events";
+import {
+  DEFAULT_CATEGORIES,
+  REPEAT_LABEL,
+  endDateOf,
+  eventKey,
+  formatEventTitle,
+  getCategoryStyle,
+  isMultiDay,
+  parseEventTitle,
+  rangeLabel,
+  shortTime,
+  timeLabelOn,
+  type EventRow,
+} from "@/lib/events";
 import { showToast } from "@/lib/toast";
 
 type Todo = {
@@ -88,7 +101,30 @@ function dayLabel(date: string) {
   );
 }
 
+function renderNoteWithLinks(text: string) {
+  const urlRegex = /(https?:\/\/[^\s)]+)/g;
+  const parts = text.split(urlRegex);
+  return parts.map((part, i) => {
+    if (part.match(urlRegex)) {
+      return (
+        <a
+          key={i}
+          href={part}
+          target="_blank"
+          rel="noreferrer"
+          className="underline decoration-rule underline-offset-4 hover:decoration-blue break-all font-medium text-navy"
+        >
+          {part}
+        </a>
+      );
+    }
+    return <span key={i}>{part}</span>;
+  });
+}
+
 function EventDetail({ event, onClose }: { event: EventRow; onClose: () => void }) {
+  const parsed = parseEventTitle(event.title);
+  const catStyle = getCategoryStyle(parsed.category);
   const start = shortTime(event.event_time);
   const end = shortTime(event.end_time);
   const rows: [string, string][] = isMultiDay(event)
@@ -107,8 +143,16 @@ function EventDetail({ event, onClose }: { event: EventRow; onClose: () => void 
 
   return (
     <div className="w-full py-2">
-      <p className="text-[17px] font-semibold">{event.title}</p>
-      <dl className="mt-2 space-y-1 text-[14px]">
+      <div className="flex items-center gap-2">
+        <span
+          className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
+          style={{ color: catStyle.color, backgroundColor: catStyle.bg }}
+        >
+          {parsed.category}
+        </span>
+        <p className="text-[17px] font-semibold">{parsed.cleanTitle}</p>
+      </div>
+      <dl className="mt-3 space-y-1 text-[14px]">
         {rows.map(([label, value]) => (
           <div key={label} className="flex gap-3">
             <dt className="w-10 flex-none text-pencil">{label}</dt>
@@ -116,6 +160,14 @@ function EventDetail({ event, onClose }: { event: EventRow; onClose: () => void 
           </div>
         ))}
       </dl>
+      {parsed.note && (
+        <div className="mt-3 rounded-xl border bg-sheet p-3">
+          <p className="mb-1 text-[12px] font-semibold text-pencil">내용 및 메모</p>
+          <div className="whitespace-pre-wrap text-[13px] leading-relaxed">
+            {renderNoteWithLinks(parsed.note)}
+          </div>
+        </div>
+      )}
       <div className="mt-2 flex justify-end">
         <button type="button" onClick={onClose} className="h-8 px-2 text-[13px] text-pencil hover:text-ink">
           닫기
@@ -155,6 +207,9 @@ export default function CalendarPage() {
   const [recurring, setRecurring] = useState<RecurringTodo[]>([]);
   const [logs, setLogs] = useState<RecurringLog[]>([]);
   const [title, setTitle] = useState("");
+  const [category, setCategory] = useState<string>("개인");
+  const [note, setNote] = useState("");
+  const [activeCategory, setActiveCategory] = useState<string>("전체");
   const [kind, setKind] = useState<Kind>("event");
   const [schedule, setSchedule] = useState<Schedule>(() => emptySchedule(todayStr));
   // 수정 중인 일정/할 일 id. 있으면 아래 입력 폼이 수정 폼이 됨
@@ -249,7 +304,20 @@ export default function CalendarPage() {
     [logs],
   );
 
-  const selectedEvents = eventsByDate[selected] ?? [];
+  const allCategories = useMemo(() => {
+    const set = new Set<string>(["개인", "공모전", "업무"]);
+    for (const e of events) {
+      const parsed = parseEventTitle(e.title);
+      if (parsed.category) set.add(parsed.category);
+    }
+    return ["전체", ...Array.from(set)];
+  }, [events]);
+
+  const selectedAllEvents = eventsByDate[selected] ?? [];
+  const selectedEvents =
+    activeCategory === "전체"
+      ? selectedAllEvents
+      : selectedAllEvents.filter((e) => parseEventTitle(e.title).category === activeCategory);
   const selectedTodos = todosByDate[selected] ?? [];
   // 반복 할 일은 만든 날부터, 지정 요일에만 표시
   const selectedWeekday = new Date(`${selected}T00:00:00`).getDay();
@@ -267,15 +335,20 @@ export default function CalendarPage() {
 
   function resetComposer(date = selected) {
     setTitle("");
+    setCategory("개인");
+    setNote("");
     setSchedule(emptySchedule(date));
     setEditingId(null);
   }
 
   function editEvent(event: EventRow) {
+    const parsed = parseEventTitle(event.title);
     setDetailId(null);
     setEditingId(event.id);
     setKind("event");
-    setTitle(event.title);
+    setCategory(parsed.category);
+    setTitle(parsed.cleanTitle);
+    setNote(parsed.note);
     setSchedule(eventToSchedule(event));
     focusComposer();
   }
@@ -307,11 +380,12 @@ export default function CalendarPage() {
 
     let ok: boolean;
     if (kind === "event") {
+      const fullTitle = formatEventTitle(category, name, note);
       const parsed = scheduleToBody(schedule);
       if (parsed.error) return showToast(parsed.error, { tone: "error" });
       ok = editingId
-        ? await send(`/api/events/${editingId}`, "PATCH", { title: name, ...parsed.body })
-        : await send("/api/events", "POST", { title: name, ...parsed.body });
+        ? await send(`/api/events/${editingId}`, "PATCH", { title: fullTitle, ...parsed.body })
+        : await send("/api/events", "POST", { title: fullTitle, ...parsed.body });
     } else if (editingId) {
       if (!todoDate) return;
       ok = await send(`/api/todos/${editingId}`, "PATCH", { title: name, dueDate: todoDate });
@@ -391,6 +465,21 @@ export default function CalendarPage() {
         </div>
       </PageHeader>
 
+      {/* 구분값 필터 */}
+      <div className="mb-3 flex flex-wrap gap-1.5">
+        {allCategories.map((cat) => (
+          <button
+            key={cat}
+            type="button"
+            onClick={() => setActiveCategory(cat)}
+            aria-pressed={activeCategory === cat}
+            className="chip h-7 px-3 text-[12px]"
+          >
+            {cat}
+          </button>
+        ))}
+      </div>
+
       <div className="mb-8">
         <div className="grid grid-cols-7 border-b pb-2">
           {WEEKDAYS.map((w) => (
@@ -405,12 +494,26 @@ export default function CalendarPage() {
             const dStr = toDateStr(date);
             const isSelected = dStr === selected;
             const isToday = dStr === todayStr;
-            const dayEvents = eventsByDate[dStr] ?? [];
-            const dayTodos = (todosByDate[dStr] ?? []).filter((t) => !t.done);
+            const dayAllEvents = eventsByDate[dStr] ?? [];
+            const dayEvents =
+              activeCategory === "전체"
+                ? dayAllEvents
+                : dayAllEvents.filter((e) => parseEventTitle(e.title).category === activeCategory);
+            const dayTodos =
+              activeCategory === "전체" || activeCategory === "개인"
+                ? (todosByDate[dStr] ?? []).filter((t) => !t.done)
+                : [];
             const hasEvents = dayEvents.length > 0;
             const hasTodos = dayTodos.length > 0;
             const labels = [
-              ...dayEvents.map((e) => ({ title: e.title, color: "var(--navy)" })),
+              ...dayEvents.map((e) => {
+                const parsed = parseEventTitle(e.title);
+                const catStyle = getCategoryStyle(parsed.category);
+                return {
+                  title: parsed.cleanTitle,
+                  color: catStyle.color,
+                };
+              }),
               ...dayTodos.map((t) => ({ title: t.title, color: "var(--teal)" })),
             ];
             const shown = labels.length > 0 ? tick % labels.length : 0;
@@ -451,13 +554,22 @@ export default function CalendarPage() {
             );
           })}
         </div>
-        <div className="mt-3 flex justify-end gap-4 text-[12px] text-pencil">
+        <div className="mt-3 flex flex-wrap justify-end gap-3 text-[12px] text-pencil">
           <span className="flex items-center gap-1.5">
-            <span className="h-1.5 w-1.5 rounded-full bg-navy" />
-            일정
+            <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--navy)" }} />
+            개인
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="h-1.5 w-1.5 rounded-full bg-teal" />할 일
+            <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--purple, #7c3aed)" }} />
+            공모전
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--blue)" }} />
+            업무
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--teal)" }} />
+            할 일
           </span>
         </div>
       </div>
@@ -493,31 +605,42 @@ export default function CalendarPage() {
             <>
               <GroupTitle color="var(--navy)">일정</GroupTitle>
               <ul>
-                {selectedEvents.map((e) => (
-                  <li key={eventKey(e)} className="row" data-editing={editingId === e.id || undefined}>
-                    {detailId === eventKey(e) ? (
-                      <EventDetail event={e} onClose={() => setDetailId(null)} />
-                    ) : (
-                      <>
-                        <span className="w-[4.5rem] flex-none text-[13px] font-semibold leading-tight text-navy">
-                          {timeLabelOn(e, selected)}
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          {e.title}
-                          {e.repeat && (
-                            <span className="ml-1.5 rounded-full bg-navy-soft px-1.5 py-0.5 align-middle text-[11px] text-navy">
-                              {REPEAT_LABEL[e.repeat]}
+                {selectedEvents.map((e) => {
+                  const parsed = parseEventTitle(e.title);
+                  const catStyle = getCategoryStyle(parsed.category);
+                  return (
+                    <li key={eventKey(e)} className="row" data-editing={editingId === e.id || undefined}>
+                      {detailId === eventKey(e) ? (
+                        <EventDetail event={e} onClose={() => setDetailId(null)} />
+                      ) : (
+                        <>
+                          <span className="w-[4.5rem] flex-none text-[13px] font-semibold leading-tight text-navy">
+                            {timeLabelOn(e, selected)}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span
+                              className="mr-1.5 inline-block rounded-full px-1.5 py-0.5 text-[10px] font-semibold align-middle"
+                              style={{ color: catStyle.color, backgroundColor: catStyle.bg }}
+                            >
+                              {parsed.category}
                             </span>
-                          )}
-                          {isMultiDay(e) && <span className="block text-[12px] text-pencil">{rangeLabel(e)}</span>}
-                        </span>
-                        <DetailButton onClick={() => setDetailId(eventKey(e))} />
-                        <EditButton onClick={() => editEvent(e)} />
-                        <DeleteButton onClick={() => removeEvent(e)} />
-                      </>
-                    )}
-                  </li>
-                ))}
+                            <span className="font-medium">{parsed.cleanTitle}</span>
+                            {parsed.note && <span className="ml-1 text-[11px] text-pencil" title="메모 있음">📝</span>}
+                            {e.repeat && (
+                              <span className="ml-1.5 rounded-full bg-navy-soft px-1.5 py-0.5 align-middle text-[11px] text-navy">
+                                {REPEAT_LABEL[e.repeat]}
+                              </span>
+                            )}
+                            {isMultiDay(e) && <span className="block text-[12px] text-pencil">{rangeLabel(e)}</span>}
+                          </span>
+                          <DetailButton onClick={() => setDetailId(eventKey(e))} />
+                          <EditButton onClick={() => editEvent(e)} />
+                          <DeleteButton onClick={() => removeEvent(e)} />
+                        </>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             </>
           )}
@@ -565,7 +688,7 @@ export default function CalendarPage() {
                 id="new-entry"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder={kind === "event" ? "일정 이름" : "할 일"}
+                placeholder={kind === "event" ? (category === "공모전" ? "공모전 이름" : "일정 이름") : "할 일"}
                 className="composer-input"
               />
               {editingId ? (
@@ -576,6 +699,34 @@ export default function CalendarPage() {
                 </button>
               )}
             </div>
+            {kind === "event" && (
+              <div className="border-t pt-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-[12px] text-pencil flex-none">구분:</span>
+                  <div className="flex flex-wrap gap-1">
+                    {DEFAULT_CATEGORIES.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setCategory(c)}
+                        aria-pressed={category === c}
+                        className="chip h-6 px-2 text-[11px]"
+                      >
+                        {c}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <textarea
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  rows={2}
+                  placeholder="내용, 해야 할 것들, 링크 (선택)"
+                  aria-label="내용 및 메모"
+                  className="field field-sm resize-none"
+                />
+              </div>
+            )}
             {editingId ? (
               kind === "todo" && (
                 <div className="border-t pt-3">

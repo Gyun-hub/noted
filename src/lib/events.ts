@@ -4,6 +4,64 @@ export type Repeat = "weekly" | "monthly" | "yearly";
 
 export const REPEAT_LABEL: Record<Repeat, string> = { weekly: "매주", monthly: "매월", yearly: "매년" };
 
+export type EventCategory = "개인" | "공모전" | "업무" | "기타";
+
+export const DEFAULT_CATEGORIES: EventCategory[] = ["개인", "공모전", "업무", "기타"];
+
+export const CATEGORY_STYLES: Record<string, { color: string; bg: string; dot: string }> = {
+  개인: { color: "var(--navy)", bg: "var(--navy-soft)", dot: "var(--navy)" },
+  공모전: { color: "var(--purple, #7c3aed)", bg: "var(--purple-soft, #ede9fe)", dot: "var(--purple, #7c3aed)" },
+  업무: { color: "var(--blue)", bg: "var(--blue-soft)", dot: "var(--blue)" },
+  기타: { color: "var(--pencil)", bg: "var(--grid)", dot: "var(--pencil)" },
+};
+
+export function getCategoryStyle(category: string) {
+  return CATEGORY_STYLES[category] ?? {
+    color: "var(--blue)",
+    bg: "var(--blue-soft)",
+    dot: "var(--blue)",
+  };
+}
+
+export type ParsedEvent = {
+  category: string;
+  cleanTitle: string;
+  note: string;
+};
+
+/**
+ * "[공모전] 2026 AI 서비스 경진대회\n\n내용..." 형식을 구분값, 제목, 메모로 분리.
+ * 말머리가 없으면 기본 '개인' 일정으로 취급.
+ */
+export function parseEventTitle(raw: string): ParsedEvent {
+  if (!raw) return { category: "개인", cleanTitle: "", note: "" };
+  const lines = raw.split("\n");
+  const firstLine = (lines[0] || "").trim();
+  const note = lines.slice(1).join("\n").trim();
+
+  let category = "개인";
+  let cleanTitle = firstLine;
+
+  const match = firstLine.match(/^\[(.*?)\]\s*(.*)$/);
+  if (match) {
+    category = match[1].trim() || "개인";
+    cleanTitle = match[2].trim() || match[1].trim();
+  }
+
+  return { category, cleanTitle, note };
+}
+
+/**
+ * 구분값(개인/공모전/업무 등), 제목, 상세 메모를 단일 문자열로 조립
+ */
+export function formatEventTitle(category: string, title: string, note?: string): string {
+  const cat = (category || "개인").trim();
+  const clean = (title || "").trim();
+  const prefix = `[${cat}] `;
+  const base = `${prefix}${clean}`;
+  return note && note.trim() ? `${base}\n\n${note.trim()}` : base;
+}
+
 export type EventRow = {
   id: string;
   title: string;

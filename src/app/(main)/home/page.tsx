@@ -9,7 +9,17 @@ import { addDays } from "@/components/recurring-history";
 import { getJson, send } from "@/lib/api";
 import { CACHE_KEYS } from "@/lib/cache-keys";
 import { readCache, writeCache } from "@/lib/local-cache";
-import { REPEAT_LABEL, endDateOf, eventKey, monthDay, rangeLabel, timeLabelOn, type EventRow } from "@/lib/events";
+import {
+  REPEAT_LABEL,
+  endDateOf,
+  eventKey,
+  getCategoryStyle,
+  monthDay,
+  parseEventTitle,
+  rangeLabel,
+  timeLabelOn,
+  type EventRow,
+} from "@/lib/events";
 
 type Todo = { id: string; title: string; done: boolean; due_date: string | null };
 type RecurringTodo = { id: string; title: string; done: boolean; weekdays: number[] | null };
@@ -446,14 +456,26 @@ export default function HomePage() {
                           <p className="text-sm text-pencil">{isToday ? "오늘은 일정이 없어요" : "—"}</p>
                         )}
                         <ul className="space-y-1">
-                          {events.map((e) => (
-                            <li key={eventKey(e)} className="flex items-baseline gap-2 text-[15px]">
-                              <span className="w-[5.5rem] flex-none text-[12px] tabular-nums text-blue">
-                                {timeLabelOn(e, day)}
-                              </span>
-                              <span className="truncate font-medium">{e.title}</span>
-                            </li>
-                          ))}
+                          {events.map((e) => {
+                            const parsed = parseEventTitle(e.title);
+                            const catStyle = getCategoryStyle(parsed.category);
+                            return (
+                              <li key={eventKey(e)} className="flex items-baseline gap-2 text-[15px]">
+                                <span className="w-[5.5rem] flex-none text-[12px] tabular-nums text-blue">
+                                  {timeLabelOn(e, day)}
+                                </span>
+                                <span className="truncate font-medium">
+                                  <span
+                                    className="mr-1.5 inline-block rounded-full px-1.5 py-0.2 text-[10px] font-semibold align-middle"
+                                    style={{ color: catStyle.color, backgroundColor: catStyle.bg }}
+                                  >
+                                    {parsed.category}
+                                  </span>
+                                  {parsed.cleanTitle}
+                                </span>
+                              </li>
+                            );
+                          })}
                           {todos.map((t) => (
                             <li key={t.id} className="flex items-baseline gap-2 text-[15px]">
                               <span className="w-[5.5rem] flex-none text-[12px] text-teal">할 일</span>
@@ -529,24 +551,36 @@ export default function HomePage() {
           {upcoming.length > 0 && (
             <Section title="다가오는 일정" tone="blue">
               <ul>
-                {upcoming.map((e) => (
-                  <li key={eventKey(e)}>
-                    <Link href={`/calendar?date=${e.event_date}`} className="row">
-                      <span className="w-16 flex-none text-[13px] text-blue">{monthDay(e.event_date)}</span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate font-medium">{e.title}</span>
-                        {(rangeLabel(e) || e.repeat) && (
-                          <span className="block text-[12px] text-pencil">
-                            {[e.repeat && `${REPEAT_LABEL[e.repeat]} 반복`, rangeLabel(e)].filter(Boolean).join(" · ")}
+                {upcoming.map((e) => {
+                  const parsed = parseEventTitle(e.title);
+                  const catStyle = getCategoryStyle(parsed.category);
+                  return (
+                    <li key={eventKey(e)}>
+                      <Link href={`/calendar?date=${e.event_date}`} className="row">
+                        <span className="w-16 flex-none text-[13px] text-blue">{monthDay(e.event_date)}</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-medium">
+                            <span
+                              className="mr-1.5 inline-block rounded-full px-1.5 py-0.2 text-[10px] font-semibold align-middle"
+                              style={{ color: catStyle.color, backgroundColor: catStyle.bg }}
+                            >
+                              {parsed.category}
+                            </span>
+                            {parsed.cleanTitle}
                           </span>
-                        )}
-                      </span>
-                      <span className="flex-none text-[12px] text-pencil">
-                        D-{Math.round((Date.parse(e.event_date) - Date.parse(today)) / 86400000)}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
+                          {(rangeLabel(e) || e.repeat) && (
+                            <span className="block text-[12px] text-pencil">
+                              {[e.repeat && `${REPEAT_LABEL[e.repeat]} 반복`, rangeLabel(e)].filter(Boolean).join(" · ")}
+                            </span>
+                          )}
+                        </span>
+                        <span className="flex-none text-[12px] text-pencil">
+                          D-{Math.round((Date.parse(e.event_date) - Date.parse(today)) / 86400000)}
+                        </span>
+                      </Link>
+                    </li>
+                  );
+                })}
               </ul>
             </Section>
           )}
